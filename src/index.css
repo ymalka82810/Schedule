@@ -1,0 +1,427 @@
+/* ---------- צבעים ----------
+   שני ערכות: בהיר (נייר כחלחל + דיו אינדיגו) וכהה (כחול לילה + ענבר).
+   צבעי המקצועות מוגדרים כגוון אחד, והמילוי והטקסט נגזרים ממנו בכל ערכה. */
+:root {
+  color-scheme: light;
+  --paper: #eef1f6;
+  --surface: #ffffff;
+  --ink: #1b2340;
+  --muted: #5e6785;
+  --line: #d5dae6;
+  --accent: #2f5bea;
+  --on-accent: #ffffff;
+  --fill-mix: 15%;
+  --text-mix: 55%;
+
+  --font-ui: 'IBM Plex Sans Hebrew', 'Segoe UI', Arial, sans-serif;
+  --font-display: 'Frank Ruhl Libre', 'David', 'Times New Roman', serif;
+
+  --ruler-w: 3.5rem;
+  --hour-h: 4rem;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #121829;
+  --surface: #1a2238;
+  --ink: #e8ecf7;
+  --muted: #98a2c0;
+  --line: #2a3454;
+  --accent: #f2b84b;
+  --on-accent: #121829;
+  --fill-mix: 24%;
+  --text-mix: 38%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --paper: #121829;
+    --surface: #1a2238;
+    --ink: #e8ecf7;
+    --muted: #98a2c0;
+    --line: #2a3454;
+    --accent: #f2b84b;
+    --on-accent: #121829;
+    --fill-mix: 24%;
+    --text-mix: 38%;
+  }
+}
+
+.c-cobalt { --hue: #2f5bea; }
+.c-teal   { --hue: #0e9aa7; }
+.c-moss   { --hue: #5b8c2a; }
+.c-amber  { --hue: #d9911a; }
+.c-coral  { --hue: #e4572e; }
+.c-plum   { --hue: #8e44ad; }
+.c-slate  { --hue: #64708f; }
+.c-rose   { --hue: #d6336c; }
+
+/* ---------- בסיס ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h3,
+p {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app {
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+/* ---------- כותרת ---------- */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  margin-bottom: 1.25rem;
+}
+
+.top h1 {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3rem);
+  line-height: 1.1;
+}
+
+.top-range {
+  color: var(--muted);
+  font-size: 1.0625rem;
+  margin-top: 0.25rem;
+}
+
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.week-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.btn {
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.btn:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.btn-icon {
+  min-width: 2.75rem;
+  padding-inline: 0;
+  font-size: 1.375rem;
+  line-height: 1;
+}
+
+/* ---------- הלוח ---------- */
+.week {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  overflow: hidden;
+}
+
+.week-days,
+.week-body {
+  display: grid;
+  grid-template-columns: var(--ruler-w) repeat(7, minmax(0, 1fr));
+}
+
+.week-days {
+  border-bottom: 1px solid var(--line);
+}
+
+.day-head {
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--line);
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: default;
+}
+
+.day-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.day-date {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.75rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 1rem;
+  text-align: center;
+}
+
+.day-head.is-today .day-date {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.week-body {
+  --body-h: calc(var(--hours) * var(--hour-h));
+}
+
+.ruler {
+  display: flex;
+  flex-direction: column;
+}
+
+.ruler-hour {
+  height: var(--hour-h);
+  padding: 0.25rem 0.5rem 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  border-top: 1px solid var(--line);
+}
+
+.ruler-hour:first-child,
+.day-col {
+  border-top: 0;
+}
+
+.day-col {
+  position: relative;
+  height: var(--body-h);
+  border-inline-start: 1px solid var(--line);
+  /* קווי השעות */
+  background-image: linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: 100% var(--hour-h);
+  background-position: 0 -1px;
+}
+
+.day-col.is-today {
+  background-color: color-mix(in oklab, var(--accent) 5%, transparent);
+}
+
+.day-empty {
+  display: none;
+}
+
+/* ---------- בלוק שיעור ---------- */
+.block {
+  position: absolute;
+  top: calc(var(--top) * var(--hour-h) + 2px);
+  height: calc(var(--span) * var(--hour-h) - 4px);
+  inset-inline-start: calc(var(--lane) / var(--lanes) * 100% + 3px);
+  width: calc(100% / var(--lanes) - 6px);
+  padding: 0.375rem 0.5rem;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  border-inline-start: 4px solid var(--hue);
+  background: color-mix(in oklab, var(--hue) var(--fill-mix), var(--surface));
+  color: color-mix(in oklab, var(--hue) var(--text-mix), var(--ink));
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.block-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.0625rem;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.block-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin-top: 0.125rem;
+}
+
+.block-kind {
+  margin-inline-start: 0.5rem;
+  font-weight: 400;
+}
+
+.block-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.block.is-short {
+  padding-block: 0.125rem;
+}
+
+.block.is-short .block-name {
+  font-size: 0.9375rem;
+}
+
+.block.is-short .block-meta {
+  display: none;
+}
+
+/* אפשרות במשבצת בחירה: מסגרת מקווקוות עד שבוחרים */
+.block.is-option {
+  border: 1.5px dashed var(--hue);
+  background: color-mix(in oklab, var(--hue) calc(var(--fill-mix) / 2), var(--surface));
+}
+
+.block-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0 0.375rem;
+  margin-bottom: 0.125rem;
+  border-radius: 0.25rem;
+  background: var(--hue);
+  color: #fff;
+}
+
+.block.is-option .block-name {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+/* כל האפשרויות באותה שעה, אז בלוח המלא אין צורך לחזור עליה בכל אחת */
+.block.is-option .block-time {
+  display: none;
+}
+
+/* ---------- קו "עכשיו" ---------- */
+.now-line {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--top) * var(--hour-h));
+  border-top: 2px solid var(--accent);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.now-time {
+  position: absolute;
+  inset-inline-end: 0;
+  top: -2px;
+  transform: translateY(-50%);
+  padding: 0 0.375rem;
+  border-radius: 0.25rem 0 0 0.25rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.foot {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* ---------- טלפון: יום אחד בכל פעם, הימים הופכים ללשוניות ---------- */
+@media (max-width: 47.5rem) {
+  .app {
+    padding: 1rem 0.75rem 2rem;
+  }
+
+  .week-days {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .week-corner {
+    display: none;
+  }
+
+  .day-head {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.5rem 0.125rem;
+    min-height: 3.5rem;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+  }
+
+  .day-head:first-of-type {
+    border-inline-start: 0;
+  }
+
+  .day-head.is-selected {
+    border-bottom-color: var(--ink);
+  }
+
+  .day-name {
+    font-size: 1rem;
+  }
+
+  .week-body {
+    grid-template-columns: var(--ruler-w) minmax(0, 1fr);
+  }
+
+  .day-col:not(.is-selected) {
+    display: none;
+  }
+
+  .day-empty {
+    display: block;
+    padding: 1.5rem 1rem;
+    color: var(--muted);
+  }
+
+  .block {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .block-name,
+  .block.is-option .block-name {
+    font-size: 1.125rem;
+  }
+
+  .block.is-option .block-time {
+    display: block;
+  }
+}

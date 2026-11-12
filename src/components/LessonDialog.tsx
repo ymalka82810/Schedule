@@ -16,9 +16,11 @@ import {
   toggleCancellation,
   updateLesson,
   updatePractice,
+  clearMove,
   type BlockTarget,
 } from '../lib/edit'
-import { DAYS, DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
+import { DAYS, DAY_NAMES, dateOfDay, formatTime, fromTimeInput, startOfWeek, toTimeInput } from '../lib/time'
+import { moveOf } from '../lib/plan'
 import { DayPicker } from './DayPicker'
 
 export type LessonTarget = Extract<BlockTarget, { kind: 'entry' | 'choice' | 'practice' }>
@@ -137,6 +139,8 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
 
   const refId = target?.kind === 'entry' ? target.entry.id : target?.kind === 'choice' ? target.group.id : target?.window.id
   const cancelledNow = !!(refId && date && (data.cancellations ?? []).some((c) => c.refId === refId && c.date === date))
+  const movedNow = refId && date ? moveOf(data, refId, date) : undefined
+  const movedDay = movedNow ? DAYS.find((d) => dateOfDay(startOfWeek(new Date(`${date}T00:00:00`)), d) === movedNow.toDate) : undefined
   const toggleWeek = () => {
     if (refId && date) onSave(toggleCancellation(data, refId, date))
   }
@@ -155,6 +159,20 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
 
         <form className="dialog-body lesson-form" onSubmit={submit}>
           {cancelledNow && <p className="import-note">השיבוץ הזה בוטל בשבוע המוצג.</p>}
+          {movedNow && !cancelledNow && (
+            <div className="import-note">
+              <p>
+                בשבוע המוצג הוזז ל{movedDay !== undefined ? `יום ${DAY_NAMES[movedDay]}, ` : ''}
+                <bdi dir="ltr">
+                  {formatTime(movedNow.start)}–{formatTime(movedNow.end)}
+                </bdi>
+                . השעה בטופס היא המקום הקבוע.
+              </p>
+              <button type="button" className="link-btn" onClick={() => refId && date && onSave(clearMove(data, refId, date))}>
+                החזרה למקום הקבוע בשבוע הזה
+              </button>
+            </div>
+          )}
 
           {target?.kind === 'choice' ? (
             <fieldset className="whoami-set">

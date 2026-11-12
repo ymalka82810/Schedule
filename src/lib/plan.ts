@@ -2,6 +2,8 @@ import type { DayIndex, Goal, Lesson, Minutes, PlanSettings, ScheduleData } from
 import { DAY_NAMES, dateOfDay, formatTime } from './time'
 import { isChag, isErev } from './hebrew'
 import { INTERVALS, KINDS, REVIEW_MINUTES, intervalText, maxPerDay, sessionLength } from './learning'
+import { learnedPrefs, prefScore } from './prefs'
+import type { Slot } from '../types'
 
 /**
  * תכנון הזמן הפנוי (שלב 4). לכל שבוע מחשבים מחדש איפה לשבץ את היעדים הגמישים:
@@ -48,6 +50,8 @@ export interface PlannedSession {
   reviewId?: string
   /** מזהה הרישום ביומן, במפגש שסומן */
   logId?: string
+  /** הוזז בגרירה: מזהה ההצמדה */
+  pinId?: string
 }
 
 export interface GoalReport {
@@ -115,23 +119,39 @@ function upcomingExams(data: ScheduleData, subject: string, weekStart: Date) {
 export const activeOn = (l: Lesson | undefined, date: string) =>
   !!l && (!l.validFrom || date >= l.validFrom) && (!l.validUntil || date <= l.validUntil)
 
+/** הזזה בשבוע אחד של שיבוץ קבוע, לפי התאריך שבו היה אמור להיות */
+export const moveOf = (data: ScheduleData, refId: string, date: string) =>
+  (data.moves ?? []).find((m) => m.refId === refId && m.date === date)
+
+/**
+ * איפה השיבוץ הקבוע נמצא בשבוע המוצג: במקום הקבוע, או במקום שאליו הוזז בשבוע הזה בלבד.
+ * date הוא התאריך המקורי (לביטולים ולהזזות). ביטול גובר על הזזה
+ */
+export function placeOf(data: ScheduleData, refId: string, slot: Slot, weekStart: Date): Slot & { date: string; moved: boolean } {
+  const date = dateOfDay(weekStart, slot.day)
+  const mv = isCancelled(data, refId, date) ? undefined : moveOf(data, refId, date)
+  const day = mv ? DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === mv.toDate) : undefined
+  if (!mv || day === undefined) return { ...slot, date, moved: false }
+  return { day, start: mv.start, end: mv.end, date, moved: true }
+}
+
 /** כל מה שתופס זמן בשבוע: שיעורים שלא בוטלו (משבצת בחירה תופסת זמן גם לפני שבחרתי) ואירועים */
 export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
   const lessons = new Map(data.lessons.map((l) => [l.id, l]))
   const out: Busy[] = []
   for (const e of data.entries) {
-    const date = dateOfDay(weekStart, e.slot.day)
+    const { date, moved: _m, ...slot } = placeOf(data, e.id, e.slot, weekStart)
     if (isCancelled(data, e.id, date) || !activeOn(lessons.get(e.lessonId), date)) continue
-    out.push({ ...e.slot, label: lessons.get(e.lessonId)?.name ?? '', kind: 'lesson' })
+    out.push({ ...slot, label: lessons.get(e.lessonId)?.name ?? '', kind: 'lesson' })
   }
   for (const g of data.choiceGroups) {
-    const date = dateOfDay(weekStart, g.slot.day)
+    const { date, moved: _m, ...slot } = placeOf(data, g.id, g.slot, weekStart)
     if (isCancelled(data, g.id, date)) continue
     const ids = (g.chosenLessonId ? [g.chosenLessonId] : g.optionLessonIds).filter((id) =>
       activeOn(lessons.get(id), date),
     )
     if (!ids.length) continue
-    out.push({ ...g.slot, label: ids.map((id) => lessons.get(id)?.name ?? '').join(' / '), kind: 'lesson' })
+    out.push({ ...slot, label: ids.map((id) => lessons.get(id)?.name ?? '').join(' / '), kind: 'lesson' })
   }
   for (const ev of data.events) {
     const day = DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === ev.date)
@@ -192,9 +212,20 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string): W
   const busy = busyForWeek(data, weekStart)
   const free = freeTime(data, weekStart, busy)
   const lessonsByDay = DAYS_OF_WEEK.map((d) => busy.filter((b) => b.day === d && b.kind === 'lesson'))
-  const practice = (data.practiceWindows ?? []).filter(
-    (w) => !isCancelled(data, w.id, dateOfDay(weekStart, w.slot.day)),
-  )
+  const practice = (data.practiceWindows ?? [])
+    .filter((w) => !isCancelled(data, w.id, dateOfDay(weekStart, w.slot.day)))
+    .map((w) => {
+      const { date: _d, moved: _m, ...slot } = placeOf(data, w.id, w.slot, weekStart)
+      return { ...w, slot }
+    })
+  const prefs = learnedPrefs(data)
+  const weekDateList = DAYS_OF_WEEK.map((d) => dateOfDay(weekStart, d))
+  /** "לא מתאים לי כאן": לא לשבץ את היעד בסביבה של שעה לפני ואחרי */
+  const skips = (data.planSkips ?? []).filter((x) => weekDateList.includes(x.date))
+  const skipped = (goalId: string, day: DayIndex, start: Minutes, end: Minutes) =>
+    skips.some(
+      (x) => x.goalId === goalId && x.date === weekDateList[day] && start < x.end + 60 && end > x.start - 60,
+    )
 
   const sessions: PlannedSession[] = []
 
@@ -215,6 +246,31 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string): W
     })
     free[day] = subtract(free[day], { start: l.start - s.breakMinutes, end: l.end + s.breakMinutes })
   }
+  // מפגשים שהזזתי בגרירה נשארים במקום החדש, אלא אם כבר סימנתי שתרגלתי אותם
+  const logged = sessions.filter((x) => x.done)
+  const pinnedReviews = new Set<string>()
+  for (const p of data.planPins ?? []) {
+    const day = DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === p.date)
+    if (day === undefined || !goals.some((g) => g.id === p.goalId)) continue
+    if (logged.some((x) => x.goalId === p.goalId && x.day === day && x.start < p.end && x.end > p.start)) continue
+    if (p.reviewId && logged.some((x) => x.reviewId === p.reviewId)) continue
+    const review = p.reviewId ? (data.reviews ?? []).find((r) => r.id === p.reviewId) : undefined
+    if (p.reviewId && !review) continue
+    if (review) pinnedReviews.add(review.id)
+    const [, m, d] = p.fromDate.split('-')
+    sessions.push({
+      id: `pin-${p.id}`,
+      pinId: p.id,
+      goalId: p.goalId,
+      day,
+      start: p.start,
+      end: p.end,
+      reasons: [`הזזת לכאן (התכנון שם אותו ב-${Number(d)}.${Number(m)}, ${formatTime(p.fromStart)})`],
+      ...(review ? { reviewId: review.id, title: `חזרה: ${review.topic}` } : {}),
+    })
+    free[day] = subtract(free[day], { start: p.start - s.breakMinutes, end: p.end + s.breakMinutes })
+  }
+
   const minutesOf = (goalId: string) =>
     sessions.filter((x) => x.goalId === goalId).reduce((m, x) => m + x.end - x.start, 0)
   const dayLoad = (day: DayIndex) => sessions.filter((x) => x.day === day).reduce((m, x) => m + x.end - x.start, 0)
@@ -284,10 +340,12 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string): W
     if (dayLoad(day) + len > s.maxHoursPerDay * 60) return null
     // מעבר לתקרה היומית של הסוג, תרגול נוסף באותו יום כבר לא מועיל
     if (g.kind && goalMinutesOn(g.id, day) + len > KINDS[g.kind].dailyCap) return null
+    if (skipped(g.id, day, start, end)) return null
 
     const learn = learningScore(g, day, start, end, f)
-    let sc = learn.sc
-    const reasons: string[] = []
+    const pref = prefScore(prefs, g.id, day, start)
+    let sc = learn.sc + pref.sc
+    const reasons: string[] = [...pref.reasons]
 
     const inPractice = practice.find((w) => w.slot.day === day && w.slot.start <= start && end <= w.slot.end)
     if (inPractice) {
@@ -353,6 +411,7 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string): W
     if (end > 22 * 60) sc -= 2
     if (start < 9 * 60) sc -= 1
 
+    if (pref.avoided) reasons.push('בדרך כלל אתה מזיז מכאן, אבל לא נמצא מקום מתאים יותר')
     return { day, start, score: sc, reasons: [...reasons, ...learn.reasons] }
   }
 
@@ -390,7 +449,7 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string): W
   const weekDates = DAYS_OF_WEEK.map((d) => dateOfDay(weekStart, d))
   const pending = (data.reviews ?? [])
     // אחרי שחוזרים, החזרה כבר מתקדמת לתאריך הבא, כך שכל מה שנשאר כאן עוד לא בוצע
-    .filter((r) => goals.some((g) => g.id === r.goalId))
+    .filter((r) => goals.some((g) => g.id === r.goalId) && !pinnedReviews.has(r.id))
     .map((r) => {
       let due = r.due
       if (today && due < today) due = today
@@ -410,8 +469,9 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string): W
           const end = t + REVIEW_MINUTES
           if (g.earliest !== undefined && t < g.earliest) continue
           if (g.latest !== undefined && end > g.latest) continue
-          // אותו יום עדיף מאוד; תרגול קל עדיף מחוץ לשעות החדות; לא מאוחר בלילה
-          let sc = -(day - first) * 3
+          if (skipped(g.id, day, t, end)) continue
+          // אותו יום עדיף מאוד; תרגול קל עדיף מחוץ לשעות החדות; לא מאוחר בלילה; ולפי ההעדפות שנלמדו
+          let sc = -(day - first) * 3 + prefScore(prefs, g.id, day, t).sc
           if (sharp && !inSharp(t, end)) sc += 1
           if (end > 22 * 60) sc -= 2
           if (start9(t)) sc -= 1

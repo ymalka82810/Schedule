@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { DayIndex, ScheduleData } from './types'
+import type { DayIndex, Minutes, ScheduleData, Slot } from './types'
 import type { Account } from './auth/account'
 import { ImportDialog } from './components/ImportDialog'
 import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
@@ -9,7 +9,10 @@ import { Today } from './components/Today'
 import { breakOn, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
 import { LoginDialog } from './components/LoginDialog'
-import { resolveBlock } from './lib/edit'
+import { clearMove, moveForever, moveOnce, refIdOf, resolveBlock, saveEvent, slotOf, type BlockTarget } from './lib/edit'
+import { MoveDialog } from './components/MoveDialog'
+import { learnedPrefs, movePlanned } from './lib/prefs'
+import { moveOf } from './lib/plan'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
 import { loadTheme, saveTheme, type Theme } from './lib/storage'
@@ -21,6 +24,7 @@ type Dialog =
   | { kind: 'event'; event: OneOffEvent | { date: string } }
   | { kind: 'session'; session: PlannedSession; goal: Goal }
   | { kind: 'goals' }
+  | { kind: 'move'; target: BlockTarget; name: string; refId: string; date: string; from: Slot; to: Slot; alreadyMoved: boolean }
 
 interface Props {
   initialData: ScheduleData
@@ -157,6 +161,57 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       const day = target.kind === 'entry' ? target.entry.slot.day : target.kind === 'choice' ? target.group.slot.day : target.window.slot.day
       setDialog({ kind: 'lesson', mode: { kind: 'edit', target }, date: dateOfDay(week, day) })
     }
+  }
+
+  /** גרירה של בלוק למקום חדש בשבוע המוצג */
+  const handleBlockMove = (blockId: string, day: DayIndex, start: Minutes) => {
+    const target = resolveBlock(data, blockId, plan.sessions)
+    const block = blocks.find((b) => b.id === blockId)
+    if (!target || !block) return
+    const len = block.end - block.start
+    const toDate = dateOfDay(weekStart, day)
+
+    if (target.kind === 'event') {
+      commit(saveEvent(data, { ...target.event, date: toDate, start, end: start + len }), backup, 'האירוע הוזז')
+      return
+    }
+
+    if (target.kind === 'plan') {
+      if (target.session.done) return
+      const next = movePlanned(data, target.session, weekStart, day, start)
+      // אם ההזזה הזו השלימה דפוס, מספרים מה נלמד
+      const before = new Set(learnedPrefs(data).map((p) => p.label))
+      const learned = learnedPrefs(next).find((p) => !before.has(p.label))
+      commit(
+        next,
+        backup,
+        learned
+          ? `המפגש הוזז. מעכשיו התכנון יודע: ${learned.label}`
+          : 'המפגש הוזז. כשתזיז מפגשים באותו כיוון שוב, התכנון ילמד את זה',
+      )
+      return
+    }
+
+    const refId = refIdOf(target)
+    const fixed = slotOf(target)
+    if (!refId || !fixed) return
+    const date = dateOfDay(weekStart, fixed.day)
+    const alreadyMoved = !!moveOf(data, refId, date)
+    // החזרה בדיוק למקום הקבוע מבטלת את ההזזה של השבוע, בלי לשאול
+    if (day === fixed.day && start === fixed.start) {
+      if (alreadyMoved) commit(clearMove(data, refId, date), backup, 'השיבוץ חזר למקום הקבוע')
+      return
+    }
+    setDialog({
+      kind: 'move',
+      target,
+      name: block.name,
+      refId,
+      date,
+      from: fixed,
+      to: { day, start, end: start + len },
+      alreadyMoved,
+    })
   }
 
   const newEventDate = () => {
@@ -302,6 +357,12 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         </section>
       )}
 
+      {!isEmpty && (
+        <p className="muted drag-hint">
+          אפשר לגרור שיעור, אירוע או מפגש מתוכנן לשעה אחרת. בטלפון: לחיצה ארוכה ואז גרירה.
+        </p>
+      )}
+
       <WeekGrid
         weekStart={weekStart}
         blocks={blocks}
@@ -311,6 +372,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         onSelectDay={setSelectedDay}
         onBlockClick={openBlock}
         dayNotes={dayNotes}
+        onBlockMove={handleBlockMove}
       />
 
       {dialog?.kind === 'lesson' && (
@@ -333,6 +395,28 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           session={dialog.session}
           goal={dialog.goal}
           onEditGoals={() => setDialog({ kind: 'goals' })}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'move' && (
+        <MoveDialog
+          name={dialog.name}
+          from={dialog.from}
+          to={dialog.to}
+          alreadyMoved={dialog.alreadyMoved}
+          onOnce={() => {
+            const to = dialog.to
+            commit(
+              moveOnce(data, dialog.refId, dialog.date, { date: dateOfDay(weekStart, to.day), start: to.start, end: to.end }),
+              backup,
+              'הוזז בשבוע הזה בלבד',
+            )
+            setDialog(null)
+          }}
+          onForever={() => {
+            commit(moveForever(data, dialog.target, dialog.to, dialog.date), backup, 'השיבוץ הוזז בכל השבועות')
+            setDialog(null)
+          }}
           onClose={() => setDialog(null)}
         />
       )}

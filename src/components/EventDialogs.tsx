@@ -7,6 +7,7 @@ import { INTERVALS, KINDS, REVIEW_TIP, blocksOf, intervalText, logReview, logSes
 import { subjectNames } from '../lib/plan'
 import { DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
 import { useEscape } from './useEscape'
+import { skipPlanned, unpinPlanned } from '../lib/prefs'
 
 interface EventProps {
   data: ScheduleData
@@ -326,6 +327,11 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
           {!session.done && !isReview && (
             <p className="muted">המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.</p>
           )}
+          {!session.done && (
+            <p className="muted">
+              אפשר לגרור את המפגש בלוח לשעה אחרת (בטלפון: לחיצה ארוכה). כשאותה הזזה חוזרת פעמיים, התכנון לומד את ההעדפה.
+            </p>
+          )}
           <div className="import-actions">
             {session.done ? (
               session.logId && (
@@ -336,6 +342,21 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
             ) : (
               <button type="button" className="btn btn-primary" onClick={save} disabled={isReview && !review}>
                 {isReview ? 'חזרתי ✓' : 'תרגלתי ✓'}
+              </button>
+            )}
+            {!session.done && (
+              <button
+                type="button"
+                className="btn"
+                title="המפגש יקבל מקום אחר, ונרשם שהשעה הזו לא התאימה"
+                onClick={() => onSave(skipPlanned(data, session, date))}
+              >
+                לא מתאים לי כאן
+              </button>
+            )}
+            {session.pinId && !session.done && (
+              <button type="button" className="btn" onClick={() => onSave(unpinPlanned(data, session.pinId!))}>
+                החזרה לתכנון האוטומטי
               </button>
             )}
             <button type="button" className="btn" onClick={onEditGoals}>

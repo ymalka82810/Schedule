@@ -1,5 +1,6 @@
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
-import { activeOn, breakOn, isCancelled, type PlannedSession } from './plan'
+import { activeOn, breakOn, isCancelled, placeOf, type PlannedSession } from './plan'
+import type { Slot } from '../types'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
 
@@ -28,6 +29,10 @@ export interface Block {
   cancelTag?: string
   /** מפגש מתוכנן שסומן כבוצע */
   isDone?: boolean
+  /** הוזז בשבוע הזה בלבד (שיבוץ קבוע), או הוזז בגרירה (מפגש מתוכנן) */
+  isMoved?: boolean
+  /** אפשר לגרור אותו לשעה אחרת */
+  draggable?: boolean
 }
 
 interface WeekOptions {
@@ -54,13 +59,21 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
 
   // בשבוע מסוים: שיעור שלא בתוקף בתאריך שלו לא מוצג
   const inForce = (id: string, day: DayIndex) => !weekStart || activeOn(lessons.get(id), dateOfDay(weekStart, day))
+  /** המקום בשבוע המוצג: קבוע, או הוזז בשבוע הזה בלבד */
+  const place = (refId: string, slot: Slot) => {
+    if (!weekStart) return { slot, moved: false }
+    const { date: _d, moved, ...at } = placeOf(data, refId, slot, weekStart)
+    return { slot: at, moved }
+  }
 
   for (const e of data.entries) {
     const l = lessons.get(e.lessonId)
     if (!l || !inForce(l.id, e.slot.day)) continue
+    const at = place(e.id, e.slot)
+    const off = cancelled(e.id, e.slot.day)
     blocks.push({
       id: e.id,
-      ...e.slot,
+      ...at.slot,
       name: l.group ? `${l.name} ${l.group}` : l.name,
       teacher: l.teacher,
       room: e.room ?? l.room,
@@ -71,20 +84,24 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOption: false,
       isOpen: false,
       type: 'lesson',
-      isCancelled: cancelled(e.id, e.slot.day) || undefined,
+      isCancelled: off || undefined,
       cancelTag: tagOf(e.id, e.slot.day),
+      isMoved: at.moved || undefined,
+      draggable: !off,
     })
   }
 
   for (const g of data.choiceGroups) {
     // אחרי בחירה מוצג רק השיעור שנבחר; לפני כן כל האפשרויות זו לצד זו
     const ids = (g.chosenLessonId ? [g.chosenLessonId] : g.optionLessonIds).filter((id) => inForce(id, g.slot.day))
+    const at = place(g.id, g.slot)
+    const off = cancelled(g.id, g.slot.day)
     ids.forEach((id, i) => {
       const l = lessons.get(id)
       if (!l) return
       blocks.push({
         id: `${g.id}:${id}`,
-        ...g.slot,
+        ...at.slot,
         name: l.group ? `${l.name} ${l.group}` : l.name,
         teacher: l.teacher,
         room: l.room,
@@ -94,17 +111,21 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
         isOption: !g.chosenLessonId,
         isOpen: false,
         type: 'choice',
-        isCancelled: cancelled(g.id, g.slot.day) || undefined,
+        isCancelled: off || undefined,
         cancelTag: tagOf(g.id, g.slot.day),
+        isMoved: at.moved || undefined,
+        draggable: !off,
       })
     })
   }
 
   // ?? [] כדי שנתונים שנשמרו לפני שהשדה נוסף ימשיכו להיטען
   for (const w of data.practiceWindows ?? []) {
+    const at = place(w.id, w.slot)
+    const off = cancelled(w.id, w.slot.day)
     blocks.push({
       id: w.id,
-      ...w.slot,
+      ...at.slot,
       name: w.name,
       room: w.context,
       color: 'teal',
@@ -113,8 +134,10 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOption: false,
       isOpen: true,
       type: 'practice',
-      isCancelled: cancelled(w.id, w.slot.day) || undefined,
+      isCancelled: off || undefined,
       cancelTag: tagOf(w.id, w.slot.day),
+      isMoved: at.moved || undefined,
+      draggable: !off,
     })
   }
 
@@ -135,6 +158,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
         isOpen: false,
         type: 'event',
         cancelTag: ev.examSubject ? 'מבחן' : undefined,
+        draggable: true,
       })
     }
   }
@@ -156,6 +180,8 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOpen: false,
       type: 'plan',
       isDone: p.done || undefined,
+      isMoved: !!p.pinId || undefined,
+      draggable: !p.done,
     })
   }
 

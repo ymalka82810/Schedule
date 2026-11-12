@@ -1067,6 +1067,49 @@ p {
   opacity: 0.45;
 }
 
+/* ---------- גרירה ---------- */
+.block.is-draggable {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (hover: hover) {
+  .block.is-draggable {
+    cursor: grab;
+  }
+}
+
+body.is-dragging,
+body.is-dragging * {
+  cursor: grabbing !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.block.is-drag-source {
+  opacity: 0.3;
+}
+
+.block.drag-ghost {
+  z-index: 5;
+  pointer-events: none;
+  border: 2px solid var(--hue);
+  background: color-mix(in oklab, var(--hue) calc(var(--fill-mix) * 2), var(--surface));
+  box-shadow: 0 6px 18px color-mix(in oklab, var(--ink) 22%, transparent);
+}
+
+.drag-hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.8125rem;
+}
+
+@media print {
+  .drag-hint {
+    display: none;
+  }
+}
+
 .block.is-cancelled .block-name {
   text-decoration: line-through;
 }
@@ -1451,4 +1494,20 @@ p {
   max-width: 24rem;
   height: 0.5rem;
   accent-color: var(--accent);
+}
+
+/* ---------- העדפות שנלמדו ---------- */
+.pref-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.375rem;
+}
+
+.pref-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
 }

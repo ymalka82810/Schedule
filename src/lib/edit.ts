@@ -169,6 +169,62 @@ export function toggleCancellation(data: ScheduleData, refId: string, date: stri
   }
 }
 
+/** מזיז שיבוץ קבוע בשבוע אחד בלבד. date = התאריך המקורי, toDate = לאן (באותו שבוע) */
+export function moveOnce(
+  data: ScheduleData,
+  refId: string,
+  date: string,
+  to: { date: string; start: number; end: number },
+): ScheduleData {
+  const list = (data.moves ?? []).filter((m) => !(m.refId === refId && m.date === date))
+  return {
+    ...data,
+    moves: [...list, { id: newId('mv', (data.moves ?? []).map((m) => m.id)), refId, date, toDate: to.date, start: to.start, end: to.end }],
+  }
+}
+
+/** מחזיר שיבוץ שהוזז בשבוע אחד למקום הקבוע שלו */
+export function clearMove(data: ScheduleData, refId: string, date: string): ScheduleData {
+  return { ...data, moves: (data.moves ?? []).filter((m) => !(m.refId === refId && m.date === date)) }
+}
+
+/** הזזה קבועה של שיבוץ, משבצת בחירה או חלון תרגול לכל השבועות. הזזה חד-שבועית באותו תאריך מתבטלת */
+export function moveForever(data: ScheduleData, target: BlockTarget, slot: Slot, date?: string): ScheduleData {
+  let next = data
+  let refId: string | undefined
+  if (target.kind === 'entry') {
+    next = moveEntry(data, target.entry.id, slot)
+    refId = target.entry.id
+  } else if (target.kind === 'choice') {
+    next = moveChoice(data, target.group.id, slot)
+    refId = target.group.id
+  } else if (target.kind === 'practice') {
+    next = updatePractice(data, target.window.id, { slot })
+    refId = target.window.id
+  }
+  return refId && date ? clearMove(next, refId, date) : next
+}
+
+/** מזהה השיבוץ הקבוע שמאחורי יעד (לביטולים ולהזזות), אם יש */
+export const refIdOf = (target: BlockTarget): string | undefined =>
+  target.kind === 'entry'
+    ? target.entry.id
+    : target.kind === 'choice'
+      ? target.group.id
+      : target.kind === 'practice'
+        ? target.window.id
+        : undefined
+
+/** המשבצת הקבועה של יעד */
+export const slotOf = (target: BlockTarget): Slot | undefined =>
+  target.kind === 'entry'
+    ? target.entry.slot
+    : target.kind === 'choice'
+      ? target.group.slot
+      : target.kind === 'practice'
+        ? target.window.slot
+        : undefined
+
 export function saveEvent(data: ScheduleData, ev: Omit<OneOffEvent, 'id'> & { id?: string }): ScheduleData {
   if (ev.id && data.events.some((e) => e.id === ev.id)) {
     return { ...data, events: data.events.map((e) => (e.id === ev.id ? { ...e, ...ev, id: e.id } : e)) }

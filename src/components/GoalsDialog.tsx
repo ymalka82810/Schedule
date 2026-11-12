@@ -7,6 +7,7 @@ import { DAYS, DAY_NAMES, fromTimeInput, toTimeInput } from '../lib/time'
 import { Swatches } from './Swatches'
 import { DayPicker } from './DayPicker'
 import { useEscape } from './useEscape'
+import { forgetPref, learnedPrefs } from '../lib/prefs'
 
 interface Props {
   data: ScheduleData
@@ -40,6 +41,7 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
   const plan = useMemo(() => planWeek(draft, weekStart, today), [draft, weekStart, today])
   const settings = planSettings(draft)
   const subjects = useMemo(() => subjectNames(draft.lessons), [draft.lessons])
+  const prefs = useMemo(() => learnedPrefs(draft), [draft])
 
   const updateGoal = (g: Goal, patch: Partial<Goal>) => setDraft((d) => saveGoal(d, { ...g, ...patch }))
   const addGoal = () => {
@@ -313,6 +315,35 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
           <button type="button" className="btn" onClick={addGoal}>
             ＋ יעד חדש
           </button>
+
+          <fieldset className="whoami-set">
+            <legend>מה התכנון למד מההזזות שלך</legend>
+            {prefs.length === 0 ? (
+              <p className="muted">
+                {(draft.planFeedback ?? []).length
+                  ? `נרשמו ${(draft.planFeedback ?? []).length} הזזות ודחיות, עוד בלי דפוס קבוע. כשאותה הזזה חוזרת פעמיים, בתאריכים שונים, היא הופכת להעדפה.`
+                  : 'עוד כלום. כשתגרור מפגש מתוכנן לשעה אחרת או תסמן "לא מתאים לי כאן", ואותו דבר יחזור פעמיים, התכנון ילמד את זה.'}
+              </p>
+            ) : (
+              <>
+                <ul className="pref-list">
+                  {prefs.map((p) => (
+                    <li key={p.label}>
+                      <span>
+                        {p.label} <span className="muted">({p.count} פעמים)</span>
+                      </span>
+                      <button type="button" className="link-btn" onClick={() => setDraft((d) => forgetPref(d, p))}>
+                        לשכוח
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="muted">
+                  אלה העדפות רכות: אם אין מקום אחר, מפגש עדיין יכול להיכנס לשם. הזזה לכיוון ההפוך מחלישה אותן.
+                </p>
+              </>
+            )}
+          </fieldset>
 
           <fieldset className="whoami-set">
             <legend>מתי מותר לתכנן</legend>

@@ -115,6 +115,63 @@ export interface Cancellation {
   refId: string
 }
 
+/** הזזה של שיבוץ קבוע (שיעור, משבצת בחירה או חלון תרגול) בשבוע אחד בלבד. המקום הקבוע לא משתנה */
+export interface Move {
+  id: string
+  /** מזהה השיבוץ, משבצת הבחירה או חלון התרגול */
+  refId: string
+  /** YYYY-MM-DD: התאריך שבו השיבוץ היה אמור להיות לפי המערכת הקבועה */
+  date: string
+  /** YYYY-MM-DD: לאן הוזז (באותו שבוע) */
+  toDate: string
+  start: Minutes
+  end: Minutes
+}
+
+/** מפגש מתוכנן שהזזתי בגרירה: נשאר במקום החדש בשבוע הזה, והתכנון משלים סביבו */
+export interface SessionPin {
+  id: string
+  goalId: string
+  /** YYYY-MM-DD */
+  date: string
+  start: Minutes
+  end: Minutes
+  /** מפגש חזרה מרווחת שהוזז */
+  reviewId?: string
+  /** איפה התכנון האוטומטי שם אותו לפני ההזזה */
+  fromDate: string
+  fromStart: Minutes
+  /** הרישום ב-planFeedback שנוצר מההזזה */
+  feedbackId: string
+}
+
+/** "לא מתאים לי כאן": המפגש לא ישובץ בסביבת השעה הזו בתאריך הזה, והתכנון מוצא לו מקום אחר */
+export interface SessionSkip {
+  id: string
+  goalId: string
+  /** YYYY-MM-DD */
+  date: string
+  start: Minutes
+  end: Minutes
+  reviewId?: string
+}
+
+/**
+ * מה עשיתי עם מפגש מתוכנן: הזזתי (לאן) או אמרתי שלא מתאים. ממה שחוזר על עצמו המערכת לומדת העדפות
+ * (שעות ביום וימים בשבוע), ראו lib/prefs.ts
+ */
+export interface PlanFeedback {
+  id: string
+  goalId: string
+  /** YYYY-MM-DD: התאריך שבו התכנון שם את המפגש */
+  date: string
+  day: DayIndex
+  start: Minutes
+  action: 'moved' | 'removed'
+  toDay?: DayIndex
+  toStart?: Minutes
+}
+
 /** סימון שתרגלתי: מפגש של יעד שבוצע בפועל. נשאר במקומו ולא זז בתכנון */
 export interface PracticeLog {
   id: string
@@ -211,6 +268,14 @@ export interface ScheduleData {
   events: OneOffEvent[]
   /** ביטולים של שיבוצים בשבוע מסוים */
   cancellations?: Cancellation[]
+  /** הזזות של שיבוצים קבועים בשבוע אחד */
+  moves?: Move[]
+  /** מפגשים מתוכננים שהוזזו בגרירה */
+  planPins?: SessionPin[]
+  /** מפגשים מתוכננים שסומנו "לא מתאים לי כאן" */
+  planSkips?: SessionSkip[]
+  /** היסטוריית ההזזות והדחיות, שממנה נלמדות העדפות */
+  planFeedback?: PlanFeedback[]
   /** חופשות: אין שיעורים, אבל מתכננים כרגיל */
   breaks?: Break[]
   /** מפגשי תרגול שסומנו כבוצעו */

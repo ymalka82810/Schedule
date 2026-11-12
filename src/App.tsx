@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import type { DayIndex, ScheduleData } from './types'
 import type { Account } from './auth/account'
 import { ImportDialog } from './components/ImportDialog'
+import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { LoginDialog } from './components/LoginDialog'
+import { resolveBlock } from './lib/edit'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
 import { loadTheme, saveTheme, type Theme } from './lib/storage'
@@ -22,6 +24,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   const [backup, setBackup] = useState(initialBackup)
   const [importing, setImporting] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
+  const [editing, setEditing] = useState<LessonDialogMode | null>(null)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
@@ -58,6 +61,17 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   const handleImport = (next: ScheduleData) => {
     commit(next, data)
     setImporting(false)
+  }
+
+  /** עריכה מהלוח לא נוגעת בגיבוי שלפני הייבוא */
+  const handleEdit = (next: ScheduleData) => {
+    commit(next, backup)
+    setEditing(null)
+  }
+
+  const openBlock = (blockId: string) => {
+    const target = resolveBlock(data, blockId)
+    if (target) setEditing({ kind: 'edit', target })
   }
 
   const handleRestore = () => {
@@ -97,8 +111,12 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
             </button>
           </div>
 
+          <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: 'new', day: selectedDay })}>
+            ＋ שיעור
+          </button>
+
           <button type="button" className="btn" onClick={() => setImporting(true)}>
-            ייבוא מקובץ PDF
+            ייבוא וגיבוי
           </button>
 
           <button
@@ -134,10 +152,15 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
 
       {isEmpty && (
         <section className="empty-state" aria-label="הלוח ריק">
-          <p>הלוח ריק. אפשר לייבא מערכת מקובץ PDF כדי לראות איך זה עובד.</p>
-          <button type="button" className="btn btn-primary" onClick={() => setImporting(true)}>
-            ייבוא מקובץ PDF
-          </button>
+          <p>הלוח ריק. אפשר לייבא מערכת מקובץ PDF, או להוסיף שיעורים בעצמך.</p>
+          <div className="import-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setImporting(true)}>
+              ייבוא מקובץ PDF
+            </button>
+            <button type="button" className="btn" onClick={() => setEditing({ kind: 'new', day: selectedDay })}>
+              הוספת שיעור
+            </button>
+          </div>
         </section>
       )}
 
@@ -148,7 +171,12 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         now={now}
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
+        onBlockClick={openBlock}
       />
+
+      {editing && (
+        <LessonDialog data={data} mode={editing} onSave={handleEdit} onClose={() => setEditing(null)} />
+      )}
 
       {loggingIn && account.kind === 'guest' && (
         <LoginDialog

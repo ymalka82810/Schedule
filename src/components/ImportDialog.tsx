@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DayIndex, Minutes, ScheduleData } from '../types'
+import type { DayIndex, ScheduleData } from '../types'
 import { WeekGrid } from './WeekGrid'
 import { buildBlocks, visibleRange } from '../lib/layout'
-import { DAYS, DAY_NAMES, formatTime, startOfWeek } from '../lib/time'
+import { DAYS, DAY_NAMES, formatTime, fromTimeInput as fromInput, startOfWeek, toTimeInput as toInput } from '../lib/time'
 import type { DraftItem, DraftOption, DraftSchedule } from '../lib/pdf/draft'
 import { readSchedulePdf } from '../lib/pdf/extract'
+import { fromBackup, toBackup } from '../lib/edit'
 import { draftToData, validateDraft } from '../lib/pdf/toSchedule'
 import {
   applySelection,
@@ -34,11 +35,6 @@ type Step =
   | { name: 'review'; fileName: string }
   | { name: 'error'; message: string }
 
-const toInput = (m: Minutes) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-const fromInput = (v: string): Minutes | null => {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(v)
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null
-}
 
 export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore, onClose }: Props) {
   const [step, setStep] = useState<Step>({ name: 'pick' })
@@ -55,6 +51,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   const [selectedDay, setSelectedDay] = useState<DayIndex>(0)
   const [onlyCheck, setOnlyCheck] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  const backupInput = useRef<HTMLInputElement>(null)
+  const [backupError, setBackupError] = useState<string | null>(null)
   const nextId = useRef(0)
   const [now] = useState(() => new Date())
   const weekStart = useMemo(() => startOfWeek(now), [now])
@@ -172,6 +170,28 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     ])
   }
 
+  const exportBackup = () => {
+    const blob = new Blob([toBackup(current)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `schedule-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const importBackup = async (file: File | undefined) => {
+    if (!file) return
+    setBackupError(null)
+    const result = fromBackup(await file.text())
+    if ('error' in result) {
+      setBackupError(result.error)
+      return
+    }
+    if (!window.confirm('לטעון את המערכת מהגיבוי במקום המערכת הנוכחית? הנוכחית תישמר לשחזור.')) return
+    onSave(result.data)
+  }
+
   const save = () => {
     if (problems.length) return
     onSave(draftToData(draft.items, current))
@@ -216,6 +236,31 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                   </button>
                 )}
               </div>
+
+              <h3 className="import-subtitle">גיבוי</h3>
+              <p className="muted">
+                קובץ JSON עם כל המערכת, כולל שיעורים אישיים וחלונות תרגול. אפשר לשמור אותו ולטעון אותו בחזרה, גם במחשב אחר.
+              </p>
+              <input
+                ref={backupInput}
+                type="file"
+                accept="application/json,.json"
+                className="visually-hidden"
+                onChange={(e) => void importBackup(e.target.files?.[0])}
+              />
+              <div className="import-actions">
+                <button type="button" className="btn" onClick={exportBackup}>
+                  הורדת גיבוי
+                </button>
+                <button type="button" className="btn" onClick={() => backupInput.current?.click()}>
+                  טעינה מגיבוי
+                </button>
+              </div>
+              {backupError && (
+                <p className="import-error" role="alert">
+                  {backupError}
+                </p>
+              )}
             </div>
           )}
 

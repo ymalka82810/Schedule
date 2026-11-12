@@ -48,3 +48,13 @@ export function formatWeekRange(weekStart: Date): string {
   }
   return `${rangeFmt.format(weekStart)} – ${rangeFmt.format(end)} ${year}`
 }
+
+/** דקות → ערך לשדה type="time" ("09:05") */
+export const toTimeInput = (m: Minutes) =>
+  `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+
+/** ערך משדה type="time" → דקות, או null אם השדה ריק או לא תקין */
+export function fromTimeInput(v: string): Minutes | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v)
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}

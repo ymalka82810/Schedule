@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { DayIndex, ScheduleData } from './types'
 import type { Account } from './auth/account'
 import { ImportDialog } from './components/ImportDialog'
+import { LoginDialog } from './components/LoginDialog'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
 import { loadTheme, saveTheme, type Theme } from './lib/storage'
@@ -20,6 +21,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   const [data, setData] = useState(initialData)
   const [backup, setBackup] = useState(initialBackup)
   const [importing, setImporting] = useState(false)
+  const [loggingIn, setLoggingIn] = useState(false)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
@@ -108,7 +110,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
           </button>
 
           {account.kind === 'guest' && (
-            <button type="button" className="btn" onClick={account.signIn}>
+            <button type="button" className="btn" onClick={() => setLoggingIn(true)}>
               כניסה (בעלים)
             </button>
           )}
@@ -147,6 +149,14 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
       />
+
+      {loggingIn && account.kind === 'guest' && (
+        <LoginDialog
+          sendCode={account.sendCode}
+          verifyCode={account.verifyCode}
+          onClose={() => setLoggingIn(false)}
+        />
+      )}
 
       {importing && (
         <ImportDialog

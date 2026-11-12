@@ -760,3 +760,18 @@ p {
   border: 1px solid var(--line);
   border-radius: 0.875rem;
 }
+
+.dialog-compact {
+  align-self: center;
+  height: auto;
+  max-width: 26rem;
+  margin: 0 1rem;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}

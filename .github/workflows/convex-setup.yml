@@ -1,6 +1,6 @@
 name: "Convex: setup env"
 
-# הרצה חד-פעמית (ידנית): יוצרת מפתחות התחברות ומגדירה ב-Convex את המייל המורשה ופרטי Google.
+# הרצה חד-פעמית (ידנית): יוצרת מפתחות התחברות ומגדירה ב-Convex את המייל המורשה ומפתח Resend.
 # הערכים נלקחים מ-GitHub Secrets ולא מודפסים ביומן.
 
 on:
@@ -12,8 +12,7 @@ jobs:
     env:
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       ALLOWED_EMAIL: ${{ secrets.ALLOWED_EMAIL }}
-      AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
-      AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -7,9 +7,6 @@ import { initialData } from '../data/initial'
 import { emptyData } from '../data/empty'
 import type { ScheduleData } from '../types'
 
-/** כתובת האתר אליה חוזרים אחרי ההתחברות עם Google */
-const siteUrl = () => new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/, '')
-
 /** האתר פתוח לכולם. ההתחברות רק מוסיפה אפשרות לבעלים, ואינה חוסמת אף אחד */
 export function AuthRoot({ url }: { url: string }) {
   const client = useMemo(() => new ConvexReactClient(url), [url])
@@ -56,7 +53,13 @@ function Router() {
       initialBackup={null}
       account={{
         kind: 'guest',
-        signIn: () => void signIn('google', { redirectTo: siteUrl() }),
+        sendCode: async (email) => {
+          await signIn('resend-otp', { email })
+        },
+        verifyCode: async (email, code) => {
+          const result = await signIn('resend-otp', { email, code })
+          return result.signingIn
+        },
       }}
     />
   )

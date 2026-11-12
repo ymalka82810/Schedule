@@ -31,7 +31,7 @@ export function buildBlocks(data: ScheduleData): Block[] {
     blocks.push({
       id: e.id,
       ...e.slot,
-      name: l.name,
+      name: l.group ? `${l.name} ${l.group}` : l.name,
       teacher: l.teacher,
       room: e.room ?? l.room,
       kind: e.kind,
@@ -52,7 +52,7 @@ export function buildBlocks(data: ScheduleData): Block[] {
       blocks.push({
         id: `${g.id}:${id}`,
         ...g.slot,
-        name: l.name,
+        name: l.group ? `${l.name} ${l.group}` : l.name,
         teacher: l.teacher,
         room: l.room,
         color: l.color,

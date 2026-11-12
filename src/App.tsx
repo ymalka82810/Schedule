@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { DayIndex } from './types'
+import { ImportDialog } from './components/ImportDialog'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
-import { loadData, loadTheme, saveTheme, type Theme } from './lib/storage'
+import {
+  loadBackup,
+  loadData,
+  loadTheme,
+  saveBackup,
+  saveData,
+  saveTheme,
+  type Theme,
+} from './lib/storage'
 import { addDays, formatWeekRange, isSameDay, startOfWeek } from './lib/time'
 
 export default function App() {
-  const [data] = useState(loadData)
+  const [data, setData] = useState(loadData)
+  const [importing, setImporting] = useState(false)
+  const [hasBackup, setHasBackup] = useState(() => loadBackup() !== null)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
@@ -30,6 +41,23 @@ export default function App() {
   const goToThisWeek = () => {
     setWeekStart(startOfWeek(now))
     setSelectedDay(now.getDay() as DayIndex)
+  }
+
+  const handleImport = (next: typeof data) => {
+    saveBackup(data)
+    saveData(next)
+    setData(next)
+    setHasBackup(true)
+    setImporting(false)
+  }
+
+  const handleRestore = () => {
+    const backup = loadBackup()
+    if (!backup) return
+    saveBackup(data)
+    saveData(backup)
+    setData(backup)
+    setImporting(false)
   }
 
   return (
@@ -63,6 +91,10 @@ export default function App() {
             </button>
           </div>
 
+          <button type="button" className="btn" onClick={() => setImporting(true)}>
+            ייבוא מקובץ PDF
+          </button>
+
           <button
             type="button"
             className="btn"
@@ -81,6 +113,16 @@ export default function App() {
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
       />
+
+      {importing && (
+        <ImportDialog
+          current={data}
+          hasBackup={hasBackup}
+          onSave={handleImport}
+          onRestore={handleRestore}
+          onClose={() => setImporting(false)}
+        />
+      )}
 
       <footer className="foot">המכינה להנדסה ומחשבים, לפי המערכת המעודכנת ל-18.10.2026.</footer>
     </div>

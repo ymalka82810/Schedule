@@ -31,7 +31,7 @@ export const initialData: ScheduleData = {
     { id: 'math', name: 'מתמטיקה', teacher: 'רונן שחק', room: 'סמסון 177', color: 'cobalt' },
     { id: 'physics', name: 'פיזיקה', teacher: 'דוד קסל', room: 'ויילר 243', color: 'coral' },
     { id: 'english', name: 'אנגלית', teacher: 'שרגא פרייס', room: 'ויילר 243', color: 'amber' },
-    { id: 'migo', name: 'לימוד תורה', room: 'תכנית מיגו', color: 'plum' },
+    { id: 'migo', name: 'לימוד תורה', room: 'תכנית מיגו', color: 'plum', personal: true },
     // הנחה: קבוצה 3, כי קבוצות 1 ו-2 מתנגשות עם האנגלית של פרייס ביום ראשון
     { id: 'writing', name: 'כתיבה מדעית', teacher: 'דניאל מנחם', color: 'moss' },
   ],

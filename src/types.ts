@@ -27,6 +27,10 @@ export interface Lesson {
   name: string
   teacher?: string
   room?: string
+  /** "קבוצה 1" וכד', כשיש כמה קבוצות לאותו מקצוע */
+  group?: string
+  /** שיעור אישי שלא מגיע מקובץ המערכת (למשל מיגו). ייבוא מקובץ לא מוחק אותו */
+  personal?: boolean
   color: ColorKey
 }
 

@@ -69,17 +69,26 @@ export function isCancelled(data: ScheduleData, refId: string, date: string): bo
   return isChag(date) || (data.cancellations ?? []).some((c) => c.refId === refId && c.date === date)
 }
 
+/** האם השיעור בתוקף בתאריך (סמסטר א' בלבד וכד') */
+export const activeOn = (l: Lesson | undefined, date: string) =>
+  !!l && (!l.validFrom || date >= l.validFrom) && (!l.validUntil || date <= l.validUntil)
+
 /** כל מה שתופס זמן בשבוע: שיעורים שלא בוטלו (משבצת בחירה תופסת זמן גם לפני שבחרתי) ואירועים */
 export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
   const lessons = new Map(data.lessons.map((l) => [l.id, l]))
   const out: Busy[] = []
   for (const e of data.entries) {
-    if (isCancelled(data, e.id, dateOfDay(weekStart, e.slot.day))) continue
+    const date = dateOfDay(weekStart, e.slot.day)
+    if (isCancelled(data, e.id, date) || !activeOn(lessons.get(e.lessonId), date)) continue
     out.push({ ...e.slot, label: lessons.get(e.lessonId)?.name ?? '', kind: 'lesson' })
   }
   for (const g of data.choiceGroups) {
-    if (isCancelled(data, g.id, dateOfDay(weekStart, g.slot.day))) continue
-    const ids = g.chosenLessonId ? [g.chosenLessonId] : g.optionLessonIds
+    const date = dateOfDay(weekStart, g.slot.day)
+    if (isCancelled(data, g.id, date)) continue
+    const ids = (g.chosenLessonId ? [g.chosenLessonId] : g.optionLessonIds).filter((id) =>
+      activeOn(lessons.get(id), date),
+    )
+    if (!ids.length) continue
     out.push({ ...g.slot, label: ids.map((id) => lessons.get(id)?.name ?? '').join(' / '), kind: 'lesson' })
   }
   for (const ev of data.events) {

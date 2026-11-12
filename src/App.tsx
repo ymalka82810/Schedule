@@ -36,6 +36,9 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   const [importing, setImporting] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  /** היסטוריה לביטול פעולה, רק בזיכרון של הדף */
+  const [history, setHistory] = useState<Array<{ data: ScheduleData; backup: ScheduleData | null; label: string }>>([])
+  const [toast, setToast] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
@@ -76,14 +79,47 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   }
 
   /** כל שינוי בנתונים עובר כאן: מתעדכן בזיכרון, ואצל הבעלים גם נשמר בשרת */
-  const commit = (next: ScheduleData, nextBackup: ScheduleData | null) => {
+  const commit = (next: ScheduleData, nextBackup: ScheduleData | null, label = 'השינוי נשמר') => {
+    setHistory((h) => [...h.slice(-19), { data, backup, label }])
+    setToast(label)
     setData(next)
     setBackup(nextBackup)
     onPersist?.(next, nextBackup)
   }
 
+  const undo = () => {
+    const last = history[history.length - 1]
+    if (!last) return
+    setHistory((h) => h.slice(0, -1))
+    setData(last.data)
+    setBackup(last.backup)
+    onPersist?.(last.data, last.backup)
+    setToast(null)
+  }
+
+  // ההודעה נעלמת אחרי כמה שניות
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 7000)
+    return () => window.clearTimeout(t)
+  }, [toast, history.length])
+
+  // Ctrl+Z מחוץ לשדות טקסט
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey && !/INPUT|TEXTAREA|SELECT/.test(el.tagName)) {
+        if (dialog || importing) return
+        e.preventDefault()
+        undo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   const handleImport = (next: ScheduleData) => {
-    commit(next, data)
+    commit(next, data, 'המערכת עודכנה מהקובץ')
     setImporting(false)
   }
 
@@ -115,7 +151,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
 
   const handleRestore = () => {
     if (!backup) return
-    commit(backup, data)
+    commit(backup, data, 'המערכת שוחזרה')
     setImporting(false)
   }
 
@@ -273,6 +309,15 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
       )}
       {dialog?.kind === 'goals' && (
         <GoalsDialog data={data} weekStart={weekStart} onSave={handleEdit} onClose={() => setDialog(null)} />
+      )}
+
+      {toast && history.length > 0 && (
+        <div className="toast" role="status">
+          <span>{toast}</span>
+          <button type="button" className="link-btn" onClick={undo}>
+            ביטול הפעולה
+          </button>
+        </div>
       )}
 
       {loggingIn && account.kind === 'guest' && (

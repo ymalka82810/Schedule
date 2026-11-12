@@ -43,7 +43,11 @@ export function draftToData(items: DraftItem[], base: ScheduleData, source?: Sou
       freshIndex++
     }
     const id = `p${++n}`
+    // תוקף שהגדרתי לשיעור (סמסטר א' בלבד) עובר לגרסה החדשה
+    const prev = base.lessons.find((l) => !l.personal && identity(l) === identity(o))
     lessons.push({
+      validFrom: prev?.validFrom,
+      validUntil: prev?.validUntil,
       id,
       name: o.name,
       teacher: o.teacher || undefined,

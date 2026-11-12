@@ -17,3 +17,10 @@ createRoot(document.getElementById('root')!).render(
     )}
   </StrictMode>,
 )
+
+// התקנה כאפליקציה ועבודה בלי אינטרנט. רק באתר החי, כדי לא להפריע בפיתוח
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err) => console.warn('service worker', err))
+  })
+}

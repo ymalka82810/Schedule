@@ -55,6 +55,8 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
       '',
   )
   const [color, setColor] = useState<ColorKey>(lesson?.color ?? 'cobalt')
+  const [validFrom, setValidFrom] = useState(lesson?.validFrom ?? '')
+  const [validUntil, setValidUntil] = useState(lesson?.validUntil ?? '')
   const [slot, setSlot] = useState<Slot>(initialSlot)
   const [chosen, setChosen] = useState<string | null>(target?.kind === 'choice' ? target.group.chosenLessonId : null)
   const [error, setError] = useState<string | null>(null)
@@ -82,6 +84,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
     if (problem) return setError(problem)
     const needsName = target?.kind !== 'choice'
     if (needsName && !name.trim()) return setError('צריך שם.')
+    if (validFrom && validUntil && validUntil < validFrom) return setError('תאריך הסיום של התוקף לפני תאריך ההתחלה.')
 
     let next = data
     if (mode.kind === 'new') {
@@ -93,6 +96,8 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
         teacher: teacher.trim() || undefined,
         room: room.trim() || undefined,
         color,
+        validFrom: validFrom || undefined,
+        validUntil: validUntil || undefined,
       })
       next = moveEntry(next, target.entry.id, slot)
     } else if (target?.kind === 'choice') {
@@ -184,7 +189,26 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
                   </div>
                 </fieldset>
               )}
-              {lesson?.note && <p className="whoami-auto">{lesson.note}</p>}
+              {lesson && (
+                <fieldset className="color-set">
+                  <legend>תוקף (לא חובה)</legend>
+                  {lesson.note && (
+                    <p className="whoami-auto">
+                      בקובץ כתוב: {lesson.note}. {!validUntil && 'אם תכתוב מתי זה נגמר, השיעור ייעלם מהמערכת אחרי התאריך.'}
+                    </p>
+                  )}
+                  <div className="edit-row">
+                    <label className="field">
+                      <span>מתאריך</span>
+                      <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+                    </label>
+                    <label className="field">
+                      <span>עד תאריך</span>
+                      <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+                    </label>
+                  </div>
+                </fieldset>
+              )}
               {usesOfLesson > 1 && (
                 <p className="muted">
                   השם, המרצה, החדר והצבע ישתנו בכל {usesOfLesson} השיבוצים של השיעור. היום והשעה רק כאן.

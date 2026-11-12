@@ -1,5 +1,5 @@
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
-import { isCancelled, type PlannedSession } from './plan'
+import { activeOn, isCancelled, type PlannedSession } from './plan'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
 
@@ -50,9 +50,12 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
     return h?.kind === 'chag' ? h.name : 'בוטל השבוע'
   }
 
+  // בשבוע מסוים: שיעור שלא בתוקף בתאריך שלו לא מוצג
+  const inForce = (id: string, day: DayIndex) => !weekStart || activeOn(lessons.get(id), dateOfDay(weekStart, day))
+
   for (const e of data.entries) {
     const l = lessons.get(e.lessonId)
-    if (!l) continue
+    if (!l || !inForce(l.id, e.slot.day)) continue
     blocks.push({
       id: e.id,
       ...e.slot,
@@ -73,7 +76,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
 
   for (const g of data.choiceGroups) {
     // אחרי בחירה מוצג רק השיעור שנבחר; לפני כן כל האפשרויות זו לצד זו
-    const ids = g.chosenLessonId ? [g.chosenLessonId] : g.optionLessonIds
+    const ids = (g.chosenLessonId ? [g.chosenLessonId] : g.optionLessonIds).filter((id) => inForce(id, g.slot.day))
     ids.forEach((id, i) => {
       const l = lessons.get(id)
       if (!l) return

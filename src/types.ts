@@ -31,6 +31,9 @@ export interface Lesson {
   group?: string
   /** הערה על הקורס מהקובץ, למשל "קורס סמסטר א' בלבד" */
   note?: string
+  /** תוקף: השיעור קיים רק בין התאריכים (YYYY-MM-DD, כולל). חסר = תמיד */
+  validFrom?: string
+  validUntil?: string
   /** שיעור אישי שלא מגיע מקובץ המערכת (למשל מיגו). ייבוא מקובץ לא מוחק אותו */
   personal?: boolean
   color: ColorKey

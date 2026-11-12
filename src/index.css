@@ -1319,3 +1319,37 @@ p {
     font-size: 0.75rem !important;
   }
 }
+
+/* ---------- הודעה עם ביטול פעולה ---------- */
+.toast {
+  position: fixed;
+  z-index: 40;
+  inset-inline: 0;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.25rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 0.75rem;
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--ink) 30%, transparent);
+}
+
+.toast .link-btn {
+  color: var(--paper);
+  font-weight: 600;
+}
+
+@media print {
+  .toast {
+    display: none;
+  }
+}
+
+:root[data-theme='dark'] .toast .link-btn {
+  color: var(--paper);
+}

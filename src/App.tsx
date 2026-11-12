@@ -82,7 +82,7 @@ export default function App() {
         onSelectDay={setSelectedDay}
       />
 
-      <footer className="foot">זו מערכת לדוגמה. הזנת השיעורים שלך תתווסף בשלב הבא.</footer>
+      <footer className="foot">המכינה להנדסה ומחשבים, לפי המערכת המעודכנת ל-18.10.2026.</footer>
     </div>
   )
 }

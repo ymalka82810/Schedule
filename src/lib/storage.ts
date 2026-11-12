@@ -1,12 +1,12 @@
 import type { ScheduleData } from '../types'
-import { sampleData } from '../data/sample'
+import { initialData } from '../data/initial'
 
 const DATA_KEY = 'schedule:data'
 const THEME_KEY = 'schedule:theme'
 
 export type Theme = 'light' | 'dark'
 
-/** טוען את המערכת השמורה. אם אין או שהיא פגומה, מחזיר את מערכת הדוגמה */
+/** טוען את המערכת השמורה. אם אין או שהיא פגומה, מחזיר את המערכת ההתחלתית */
 export function loadData(): ScheduleData {
   try {
     const raw = localStorage.getItem(DATA_KEY)
@@ -15,9 +15,9 @@ export function loadData(): ScheduleData {
       if (parsed && parsed.version === 1 && Array.isArray(parsed.entries)) return parsed
     }
   } catch {
-    // נופלים למערכת הדוגמה
+    // נופלים להמערכת ההתחלתית
   }
-  return sampleData
+  return initialData
 }
 
 export function saveData(data: ScheduleData): void {

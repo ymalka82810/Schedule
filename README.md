@@ -12,7 +12,7 @@
 - [ ] שלב 4: יעדים גמישים ושיבוץ אוטומטי
 - [ ] שלב 5: העלאת קובץ מערכת
 
-כרגע מוצגת מערכת לדוגמה מתוך `src/data/sample.ts`.
+מוצגת המערכת של המכינה להנדסה ומחשבים, מתוך `src/data/initial.ts`.
 
 ## הרצה מקומית
 
@@ -24,7 +24,7 @@ npm run dev
 ## מבנה
 
 - `src/types.ts` – מבנה הנתונים (Slot, Lesson, FixedEntry, ChoiceGroup, Goal, OneOffEvent)
-- `src/data/sample.ts` – מערכת לדוגמה
+- `src/data/initial.ts` – המערכת ההתחלתית
 - `src/lib/` – זמן ותאריכים, אחסון ב-localStorage, חישוב הבלוקים לציור
 - `src/components/WeekGrid.tsx` – הלוח השבועי
 - `src/index.css` – עיצוב וערכות הצבעים

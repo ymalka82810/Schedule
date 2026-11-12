@@ -180,6 +180,18 @@ export function removeEvent(data: ScheduleData, id: string): ScheduleData {
   return { ...data, events: data.events.filter((e) => e.id !== id) }
 }
 
+/** סימון שתרגלתי מפגש מתוכנן, או ביטול הסימון */
+export function toggleDone(
+  data: ScheduleData,
+  session: { id: string; goalId: string; start: number; end: number; done?: boolean },
+  date: string,
+): ScheduleData {
+  const log = data.log ?? []
+  if (session.done) return { ...data, log: log.filter((l) => l.id !== session.id) }
+  const id = newId('done', log.map((l) => l.id))
+  return { ...data, log: [...log, { id, goalId: session.goalId, date, start: session.start, end: session.end }] }
+}
+
 // ---------- יעדים ----------
 
 export function saveGoal(data: ScheduleData, goal: Omit<Goal, 'id'> & { id?: string }): ScheduleData {
@@ -237,6 +249,7 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     events: Array.isArray(data.events) ? (data.events as ScheduleData['events']) : [],
     ...(Array.isArray(data.cancellations) ? { cancellations: data.cancellations as ScheduleData['cancellations'] } : {}),
     ...(isObj(data.plan) ? { plan: data.plan as unknown as ScheduleData['plan'] } : {}),
+    ...(Array.isArray(data.log) ? { log: data.log as ScheduleData['log'] } : {}),
     settings: data.settings as unknown as ScheduleData['settings'],
   }
   if (isObj(data.source)) full.source = data.source as unknown as ScheduleData['source']

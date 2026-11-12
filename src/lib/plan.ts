@@ -1,5 +1,6 @@
 import type { DayIndex, Goal, Lesson, Minutes, PlanSettings, ScheduleData } from '../types'
 import { DAY_NAMES, dateOfDay, formatTime } from './time'
+import { isChag, isErev } from './hebrew'
 
 /**
  * תכנון הזמן הפנוי (שלב 4). לכל שבוע מחשבים מחדש איפה לשבץ את היעדים הגמישים:
@@ -36,13 +37,17 @@ export interface PlannedSession {
   end: Minutes
   /** למה דווקא כאן, בשפה פשוטה */
   reasons: string[]
+  /** סומן שתרגלתי */
+  done?: boolean
 }
 
 export interface GoalReport {
   goalId: string
   name: string
-  /** דקות ששובצו */
+  /** דקות ששובצו (כולל מה שבוצע) */
   planned: Minutes
+  /** דקות שסומנו כבוצעו */
+  done: Minutes
   min: Minutes
   max: Minutes
 }
@@ -59,9 +64,9 @@ interface Interval {
 
 const STEP = 15
 
-/** האם השיבוץ מבוטל בתאריך הזה */
+/** האם השיבוץ מבוטל בתאריך הזה: ביטול ידני, או חג (אין לימודים) */
 export function isCancelled(data: ScheduleData, refId: string, date: string): boolean {
-  return (data.cancellations ?? []).some((c) => c.refId === refId && c.date === date)
+  return isChag(date) || (data.cancellations ?? []).some((c) => c.refId === refId && c.date === date)
 }
 
 /** כל מה שתופס זמן בשבוע: שיעורים שלא בוטלו (משבצת בחירה תופסת זמן גם לפני שבחרתי) ואירועים */
@@ -103,8 +108,11 @@ function subtract(free: Interval[], cut: Interval): Interval[] {
 export function freeTime(data: ScheduleData, weekStart: Date, busy = busyForWeek(data, weekStart)): Interval[][] {
   const s = planSettings(data)
   return DAYS_OF_WEEK.map((day) => {
-    if (s.offDays.includes(day)) return []
-    const end = day === 5 && s.fridayEnd !== null ? Math.min(s.dayEnd, s.fridayEnd) : s.dayEnd
+    const date = dateOfDay(weekStart, day)
+    if (s.offDays.includes(day) || isChag(date)) return []
+    // שישי וערב חג: היום נגמר מוקדם
+    const early = (day === 5 || isErev(date)) && s.fridayEnd !== null
+    const end = early ? Math.min(s.dayEnd, s.fridayEnd!) : s.dayEnd
     let free: Interval[] = end > s.dayStart ? [{ start: s.dayStart, end }] : []
     for (const b of busy.filter((b) => b.day === day)) {
       free = subtract(free, { start: b.start - s.breakMinutes, end: b.end + s.breakMinutes })
@@ -134,6 +142,14 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
   )
 
   const sessions: PlannedSession[] = []
+
+  // מה שכבר בוצע השבוע נשאר במקומו, והתכנון משלים סביבו
+  for (const l of data.log ?? []) {
+    const day = DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === l.date)
+    if (day === undefined || !goals.some((g) => g.id === l.goalId)) continue
+    sessions.push({ id: l.id, goalId: l.goalId, day, start: l.start, end: l.end, reasons: ['סימנת שתרגלת'], done: true })
+    free[day] = subtract(free[day], { start: l.start - s.breakMinutes, end: l.end + s.breakMinutes })
+  }
   const minutesOf = (goalId: string) =>
     sessions.filter((x) => x.goalId === goalId).reduce((m, x) => m + x.end - x.start, 0)
   const dayLoad = (day: DayIndex) => sessions.filter((x) => x.day === day).reduce((m, x) => m + x.end - x.start, 0)
@@ -220,7 +236,8 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
       }
     }
     if (!best || best.score < minScore) return false
-    const n = sessions.filter((x) => x.goalId === g.id).length + 1
+    let n = sessions.filter((x) => x.goalId === g.id).length + 1
+    while (sessions.some((x) => x.id === `plan-${g.id}-${n}`)) n++
     sessions.push({
       id: `plan-${g.id}-${n}`,
       goalId: g.id,
@@ -258,6 +275,7 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
       goalId: g.id,
       name: g.name,
       planned: minutesOf(g.id),
+      done: sessions.filter((x) => x.goalId === g.id && x.done).reduce((m, x) => m + x.end - x.start, 0),
       min: g.minHoursPerWeek * 60,
       max: g.maxHoursPerWeek * 60,
     })),

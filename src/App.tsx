@@ -5,6 +5,7 @@ import { ImportDialog } from './components/ImportDialog'
 import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { EventDialog, SessionDialog } from './components/EventDialogs'
 import { GoalsDialog } from './components/GoalsDialog'
+import { Today } from './components/Today'
 import { planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
 import { LoginDialog } from './components/LoginDialog'
@@ -54,6 +55,17 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   // התכנון של הזמן הפנוי מחושב מחדש לכל שבוע: אירועים וביטולים משנים אותו
   const plan = useMemo(() => planWeek(data, weekStart), [data, weekStart])
   const blocks = useMemo(() => buildBlocks(data, { weekStart, plan: plan.sessions }), [data, weekStart, plan])
+
+  // לכרטיס "היום": תמיד השבוע של היום והשבוע שאחריו, בלי קשר לשבוע המוצג
+  const thisWeek = useMemo(() => startOfWeek(now), [now])
+  const todayBlocks = useMemo(
+    () => buildBlocks(data, { weekStart: thisWeek, plan: planWeek(data, thisWeek).sessions }),
+    [data, thisWeek],
+  )
+  const nextWeekBlocks = useMemo(() => {
+    const w = addDays(thisWeek, 7)
+    return buildBlocks(data, { weekStart: w, plan: planWeek(data, w).sessions })
+  }, [data, thisWeek])
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
   const isEmpty = blocks.length === 0
 
@@ -81,14 +93,17 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
     setDialog(null)
   }
 
-  const openBlock = (blockId: string) => {
-    const target = resolveBlock(data, blockId, plan.sessions)
+  const openBlock = (blockId: string) => openBlockIn(blockId, weekStart)
+
+  function openBlockIn(blockId: string, week: Date) {
+    const sessions = week === weekStart ? plan.sessions : planWeek(data, week).sessions
+    const target = resolveBlock(data, blockId, sessions)
     if (!target) return
     if (target.kind === 'event') setDialog({ kind: 'event', event: target.event })
     else if (target.kind === 'plan') setDialog({ kind: 'session', session: target.session, goal: target.goal })
     else {
       const day = target.kind === 'entry' ? target.entry.slot.day : target.kind === 'choice' ? target.group.slot.day : target.window.slot.day
-      setDialog({ kind: 'lesson', mode: { kind: 'edit', target }, date: dateOfDay(weekStart, day) })
+      setDialog({ kind: 'lesson', mode: { kind: 'edit', target }, date: dateOfDay(week, day) })
     }
   }
 
@@ -158,6 +173,10 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
             ייבוא וגיבוי
           </button>
 
+          <button type="button" className="btn" onClick={() => window.print()}>
+            הדפסה
+          </button>
+
           <button
             type="button"
             className="btn"
@@ -187,6 +206,18 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         <p className="mode-note">
           סביבת בדיקה: הכול נשמר רק בזיכרון של הדף ויימחק ברענון. אין חיבור לשום חשבון.
         </p>
+      )}
+
+      {!isEmpty && (
+        <Today
+          blocks={todayBlocks}
+          nextWeekBlocks={nextWeekBlocks}
+          now={now}
+          onOpen={(id) => {
+            if (!isThisWeek) goToThisWeek()
+            openBlockIn(id, thisWeek)
+          }}
+        />
       )}
 
       {isEmpty && (
@@ -231,6 +262,9 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
       )}
       {dialog?.kind === 'session' && (
         <SessionDialog
+          data={data}
+          date={dateOfDay(weekStart, dialog.session.day)}
+          onSave={handleEdit}
           session={dialog.session}
           goal={dialog.goal}
           onEditGoals={() => setDialog({ kind: 'goals' })}

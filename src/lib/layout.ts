@@ -1,6 +1,7 @@
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
 import { isCancelled, type PlannedSession } from './plan'
 import { dateOfDay } from './time'
+import { dayInfo } from './hebrew'
 
 /** בלוק אחד מוכן לציור בלוח */
 export interface Block {
@@ -23,6 +24,10 @@ export interface Block {
   type: 'lesson' | 'choice' | 'practice' | 'event' | 'plan'
   /** בוטל בשבוע המוצג. מוצג חיוור, כדי שאפשר יהיה להחזיר */
   isCancelled?: boolean
+  /** למה בוטל: "בוטל השבוע" או שם החג */
+  cancelTag?: string
+  /** מפגש מתוכנן שסומן כבוצע */
+  isDone?: boolean
 }
 
 interface WeekOptions {
@@ -39,6 +44,11 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
   const { weekStart } = opts
   const cancelled = (refId: string, day: DayIndex) =>
     weekStart ? isCancelled(data, refId, dateOfDay(weekStart, day)) : false
+  const tagOf = (refId: string, day: DayIndex) => {
+    if (!weekStart || !cancelled(refId, day)) return undefined
+    const h = dayInfo(dateOfDay(weekStart, day)).holiday
+    return h?.kind === 'chag' ? h.name : 'בוטל השבוע'
+  }
 
   for (const e of data.entries) {
     const l = lessons.get(e.lessonId)
@@ -57,6 +67,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOpen: false,
       type: 'lesson',
       isCancelled: cancelled(e.id, e.slot.day) || undefined,
+      cancelTag: tagOf(e.id, e.slot.day),
     })
   }
 
@@ -79,6 +90,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
         isOpen: false,
         type: 'choice',
         isCancelled: cancelled(g.id, g.slot.day) || undefined,
+        cancelTag: tagOf(g.id, g.slot.day),
       })
     })
   }
@@ -97,6 +109,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOpen: true,
       type: 'practice',
       isCancelled: cancelled(w.id, w.slot.day) || undefined,
+      cancelTag: tagOf(w.id, w.slot.day),
     })
   }
 
@@ -136,6 +149,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOption: false,
       isOpen: false,
       type: 'plan',
+      isDone: p.done || undefined,
     })
   }
 

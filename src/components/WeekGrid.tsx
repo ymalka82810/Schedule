@@ -1,7 +1,8 @@
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { DayIndex, Minutes } from '../types'
 import type { Block } from '../lib/layout'
-import { DAYS, DAY_NAMES, addDays, formatTime, isSameDay, minutesOfDay } from '../lib/time'
+import { DAYS, DAY_NAMES, addDays, formatTime, isSameDay, isoDate, minutesOfDay } from '../lib/time'
+import { dayInfo } from '../lib/hebrew'
 
 interface Props {
   weekStart: Date
@@ -29,17 +30,20 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
         {DAYS.map((day) => {
           const date = addDays(weekStart, day)
           const isToday = isSameDay(date, now)
+          const info = dayInfo(isoDate(date))
           return (
             <button
               key={day}
               type="button"
               role="tab"
               aria-selected={day === selectedDay}
-              className={`day-head${isToday ? ' is-today' : ''}${day === selectedDay ? ' is-selected' : ''}`}
+              className={`day-head${isToday ? ' is-today' : ''}${day === selectedDay ? ' is-selected' : ''}${info.holiday ? ` h-${info.holiday.kind}` : ''}`}
               onClick={() => onSelectDay(day)}
             >
               <span className="day-name">{DAY_NAMES[day]}</span>
               <span className="day-date">{date.getDate()}</span>
+              <span className="day-hebrew">{info.hebrew}</span>
+              {info.holiday && <span className="day-holiday">{info.holiday.name}</span>}
             </button>
           )
         })}
@@ -95,15 +99,15 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}`}
                     style={style}
                     {...click}
                   >
                     {b.isOption && <span className="block-tag">לבחירה</span>}
                     {b.isOpen && <span className="block-tag">לבחירתך</span>}
-                    {b.isCancelled && <span className="block-tag">בוטל השבוע</span>}
+                    {b.isCancelled && <span className="block-tag">{b.cancelTag ?? 'בוטל השבוע'}</span>}
                     {b.type === 'event' && <span className="block-tag">אירוע</span>}
-                    {b.type === 'plan' && <span className="block-tag">מתוכנן</span>}
+                    {b.type === 'plan' && <span className="block-tag">{b.isDone ? 'בוצע ✓' : 'מתוכנן'}</span>}
                     <h3 className="block-name">{b.name}</h3>
                     <p className="block-time">
                       <bdi dir="ltr">

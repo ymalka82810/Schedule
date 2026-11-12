@@ -88,7 +88,9 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                 >
                   <span className="goal-name">{g.name || 'יעד בלי שם'}</span>
                   <span className={short ? 'goal-status is-short' : 'goal-status'}>
-                    {r ? `${hours(r.planned)} מתוך ${hours(r.min)}–${hours(r.max)} שעות השבוע` : ''}
+                    {r
+                      ? `${hours(r.planned)} מתוך ${hours(r.min)}–${hours(r.max)} שעות השבוע${r.done ? `, בוצעו ${hours(r.done)}` : ''}`
+                      : ''}
                   </span>
                 </button>
                 {short && (

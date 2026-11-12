@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { OneOffEvent, ScheduleData } from '../types'
 import type { PlannedSession } from '../lib/plan'
 import type { Goal } from '../types'
-import { removeEvent, saveEvent, slotProblem } from '../lib/edit'
+import { removeEvent, saveEvent, slotProblem, toggleDone } from '../lib/edit'
 import { DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
 import { useEscape } from './useEscape'
 
@@ -106,14 +106,18 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
 }
 
 interface SessionProps {
+  data: ScheduleData
   session: PlannedSession
   goal: Goal
+  /** התאריך של המפגש */
+  date: string
+  onSave: (data: ScheduleData) => void
   onEditGoals: () => void
   onClose: () => void
 }
 
 /** מפגש שתוכנן אוטומטית: מתי ולמה דווקא שם */
-export function SessionDialog({ session, goal, onEditGoals, onClose }: SessionProps) {
+export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, onClose }: SessionProps) {
   useEscape(onClose)
   return (
     <div className="dialog-backdrop" role="presentation">
@@ -140,10 +144,15 @@ export function SessionDialog({ session, goal, onEditGoals, onClose }: SessionPr
             </ul>
           </div>
           <p className="muted">
-            המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. כדי לשנות כמה, כמה זמן או מתי, ערוך את היעד.
+            {session.done
+              ? 'סימנת שתרגלת. המפגש נשאר במקומו, ושאר השבוע מתוכנן סביבו.'
+              : 'המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.'}
           </p>
           <div className="import-actions">
-            <button type="button" className="btn btn-primary" onClick={onEditGoals}>
+            <button type="button" className="btn btn-primary" onClick={() => onSave(toggleDone(data, session, date))}>
+              {session.done ? 'ביטול הסימון' : 'תרגלתי ✓'}
+            </button>
+            <button type="button" className="btn" onClick={onEditGoals}>
               עריכת היעדים
             </button>
             <button type="button" className="btn" onClick={onClose}>

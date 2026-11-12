@@ -94,6 +94,16 @@ export interface Cancellation {
   refId: string
 }
 
+/** סימון שתרגלתי: מפגש של יעד שבוצע בפועל. נשאר במקומו ולא זז בתכנון */
+export interface PracticeLog {
+  id: string
+  goalId: string
+  /** YYYY-MM-DD */
+  date: string
+  start: Minutes
+  end: Minutes
+}
+
 /** איך מתכננים את הזמן הפנוי */
 export interface PlanSettings {
   /** מתי מתחיל ונגמר היום הפעיל (קימה ושינה) */
@@ -140,6 +150,8 @@ export interface ScheduleData {
   events: OneOffEvent[]
   /** ביטולים של שיבוצים בשבוע מסוים */
   cancellations?: Cancellation[]
+  /** מפגשי תרגול שסומנו כבוצעו */
+  log?: PracticeLog[]
   settings: Settings
   /** הגדרות תכנון הזמן הפנוי. חסר = ברירת המחדל */
   plan?: PlanSettings

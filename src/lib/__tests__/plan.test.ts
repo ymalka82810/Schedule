@@ -93,3 +93,27 @@ describe('planWeek', () => {
     expect(planWeek(data, WEEK)).toEqual(plan)
   })
 })
+
+describe('חגים ותרגול שבוצע', () => {
+  it('ביום חג אין שיעורים ואין תכנון, ובערב חג היום נגמר מוקדם', () => {
+    // שבוע ראש השנה ויום כיפור תשפ"ז: ראשון 20.9.2026 ערב יום כיפור, שני 21.9 יום כיפור
+    const week = new Date(2026, 8, 20)
+    const busy = busyForWeek(initialData, week)
+    expect(busy.some((b) => b.day === 1)).toBe(false)
+    const free = freeTime(initialData, week)
+    expect(free[1]).toEqual([])
+    expect(Math.max(...free[0].map((f) => f.end))).toBeLessThanOrEqual(12 * 60)
+  })
+
+  it('מפגש שסומן כבוצע נשאר במקומו ונספר', () => {
+    const g = goal({ id: 'g', name: 'קריאה', minHoursPerWeek: 2, maxHoursPerWeek: 2 })
+    const data: ScheduleData = {
+      ...initialData,
+      goals: [g],
+      log: [{ id: 'd1', goalId: 'g', date: '2026-11-20', start: 9 * 60, end: 10 * 60 }],
+    }
+    const p = planWeek(data, WEEK)
+    expect(p.sessions.find((s) => s.done)).toMatchObject({ day: 5, start: 540 })
+    expect(p.report[0]).toMatchObject({ planned: 120, done: 60 })
+  })
+})

@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { DayIndex } from './types'
+import type { DayIndex, ScheduleData } from './types'
+import type { Account } from './auth/account'
 import { ImportDialog } from './components/ImportDialog'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
-import {
-  loadBackup,
-  loadData,
-  loadTheme,
-  saveBackup,
-  saveData,
-  saveTheme,
-  type Theme,
-} from './lib/storage'
+import { loadTheme, saveTheme, type Theme } from './lib/storage'
 import { addDays, formatWeekRange, isSameDay, startOfWeek } from './lib/time'
 
-export default function App() {
-  const [data, setData] = useState(loadData)
+interface Props {
+  initialData: ScheduleData
+  /** המערכת שלפני הייבוא האחרון, לשחזור */
+  initialBackup: ScheduleData | null
+  account: Account
+  /** נקרא בכל שינוי בנתונים. רק אצל הבעלים, כדי לשמור בשרת */
+  onPersist?: (data: ScheduleData, backup: ScheduleData | null) => void
+}
+
+export default function App({ initialData, initialBackup, account, onPersist }: Props) {
+  const [data, setData] = useState(initialData)
+  const [backup, setBackup] = useState(initialBackup)
   const [importing, setImporting] = useState(false)
-  const [hasBackup, setHasBackup] = useState(() => loadBackup() !== null)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
@@ -36,6 +38,7 @@ export default function App() {
 
   const blocks = useMemo(() => buildBlocks(data), [data])
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
+  const isEmpty = blocks.length === 0
 
   const isThisWeek = isSameDay(weekStart, startOfWeek(now))
   const goToThisWeek = () => {
@@ -43,20 +46,21 @@ export default function App() {
     setSelectedDay(now.getDay() as DayIndex)
   }
 
-  const handleImport = (next: typeof data) => {
-    saveBackup(data)
-    saveData(next)
+  /** כל שינוי בנתונים עובר כאן: מתעדכן בזיכרון, ואצל הבעלים גם נשמר בשרת */
+  const commit = (next: ScheduleData, nextBackup: ScheduleData | null) => {
     setData(next)
-    setHasBackup(true)
+    setBackup(nextBackup)
+    onPersist?.(next, nextBackup)
+  }
+
+  const handleImport = (next: ScheduleData) => {
+    commit(next, data)
     setImporting(false)
   }
 
   const handleRestore = () => {
-    const backup = loadBackup()
     if (!backup) return
-    saveBackup(data)
-    saveData(backup)
-    setData(backup)
+    commit(backup, data)
     setImporting(false)
   }
 
@@ -102,8 +106,38 @@ export default function App() {
           >
             {theme === 'dark' ? 'מצב בהיר' : 'מצב כהה'}
           </button>
+
+          {account.kind === 'guest' && (
+            <button type="button" className="btn" onClick={account.signIn}>
+              כניסה (בעלים)
+            </button>
+          )}
+          {account.kind === 'owner' && (
+            <button type="button" className="btn" onClick={account.signOut}>
+              התנתקות
+            </button>
+          )}
         </div>
       </header>
+
+      {account.kind === 'owner' ? (
+        <p className="mode-note is-owner">
+          מחובר כ-<bdi dir="ltr">{account.email}</bdi>. המערכת נשמרת בשרת.
+        </p>
+      ) : (
+        <p className="mode-note">
+          סביבת בדיקה: הכול נשמר רק בזיכרון של הדף ויימחק ברענון. אין חיבור לשום חשבון.
+        </p>
+      )}
+
+      {isEmpty && (
+        <section className="empty-state" aria-label="הלוח ריק">
+          <p>הלוח ריק. אפשר לייבא מערכת מקובץ PDF כדי לראות איך זה עובד.</p>
+          <button type="button" className="btn btn-primary" onClick={() => setImporting(true)}>
+            ייבוא מקובץ PDF
+          </button>
+        </section>
+      )}
 
       <WeekGrid
         weekStart={weekStart}
@@ -117,14 +151,13 @@ export default function App() {
       {importing && (
         <ImportDialog
           current={data}
-          hasBackup={hasBackup}
+          hasBackup={backup !== null}
+          memoryOnly={account.kind !== 'owner'}
           onSave={handleImport}
           onRestore={handleRestore}
           onClose={() => setImporting(false)}
         />
       )}
-
-      <footer className="foot">המכינה להנדסה ומחשבים, לפי המערכת המעודכנת ל-18.10.2026.</footer>
     </div>
   )
 }

@@ -12,11 +12,11 @@
 - [ ] שלב 4: יעדים גמישים ושיבוץ אוטומטי
 - [ ] שלב 5: העלאת קובץ מערכת (התחלנו: קריאת PDF עם טבלה ושכבת טקסט, מסך בדיקה ועריכה בסיסית. נשארו אשף "מי אני", OCR ועדכון גרסה)
 
-מוצגת המערכת של המכינה להנדסה ומחשבים, מתוך `src/data/initial.ts`.
+האתר פתוח לכולם. בלי התחברות זו סביבת בדיקה עם לוח ריק שנשמר רק בזיכרון. הבעלים נכנס עם Google, והמערכת האישית שלו (`src/data/initial.ts`, המכינה להנדסה ומחשבים) נשמרת ב-Convex.
 
 הרעיונות להמשך, ובמיוחד קריאת מערכת מקובץ PDF: [WISHLIST.md](WISHLIST.md)
 
-התחברות עם Google רק למייל אחד, על שרת Convex: [SETUP-AUTH.md](SETUP-AUTH.md)
+התחברות עם Google רק למייל אחד ושמירה בשרת Convex: [SETUP-AUTH.md](SETUP-AUTH.md)
 
 ## הרצה מקומית
 
@@ -29,12 +29,12 @@ npm run dev
 
 - `src/types.ts` – מבנה הנתונים (Slot, Lesson, FixedEntry, ChoiceGroup, Goal, OneOffEvent)
 - `src/data/initial.ts` – המערכת ההתחלתית
-- `src/lib/` – זמן ותאריכים, אחסון ב-localStorage, חישוב הבלוקים לציור
+- `src/lib/` – זמן ותאריכים, העדפת ערכת הצבעים ב-localStorage, חישוב הבלוקים לציור
 - `src/components/WeekGrid.tsx` – הלוח השבועי
 - `src/lib/pdf/` – קריאת קובץ PDF: `raw.ts` (מילים וקווים מהעמוד), `grid.ts` (טבלה ותאים ממוזגים), `parseCell.ts` ו-`parseSchedule.ts` (פענוח), `toSchedule.ts` (טיוטה למערכת)
 - `src/components/ImportDialog.tsx` – מסך הייבוא: בחירת קובץ, טיוטה על הלוח ועריכה
-- `convex/` – שרת Convex: התחברות עם Google ובדיקת המייל המורשה
-- `src/auth/AuthRoot.tsx` – מסך הכניסה והגנה על האתר
+- `convex/` – שרת Convex: התחברות עם Google ובדיקת המייל המורשה, ושמירת המערכת של הבעלים
+- `src/auth/AuthRoot.tsx` – בחירה בין סביבת בדיקה (זיכרון) לבעלים (שרת)
 - `src/index.css` – עיצוב וערכות הצבעים
 
 כל דחיפה ל-`main` בונה ומפרסמת את האתר ל-GitHub Pages.

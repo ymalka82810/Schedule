@@ -10,6 +10,8 @@ import { draftToData, validateDraft } from '../lib/pdf/toSchedule'
 interface Props {
   current: ScheduleData
   hasBackup: boolean
+  /** סביבת בדיקה: מה שנשמר כאן נעלם ברענון */
+  memoryOnly: boolean
   onSave: (data: ScheduleData) => void
   onRestore: () => void
   onClose: () => void
@@ -27,7 +29,7 @@ const fromInput = (v: string): Minutes | null => {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null
 }
 
-export function ImportDialog({ current, hasBackup, onSave, onRestore, onClose }: Props) {
+export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore, onClose }: Props) {
   const [step, setStep] = useState<Step>({ name: 'pick' })
   const [draft, setDraft] = useState<DraftSchedule>({ items: [], warnings: [] })
   const [selectedDay, setSelectedDay] = useState<DayIndex>(0)
@@ -268,7 +270,11 @@ export function ImportDialog({ current, hasBackup, onSave, onRestore, onClose }:
                 ביטול
               </button>
             </div>
-            <p className="muted">המערכת הקודמת נשמרת בגיבוי, ואפשר לשחזר אותה ממסך הייבוא.</p>
+            <p className="muted">
+              {memoryOnly
+                ? 'המערכת נשמרת רק בזיכרון של הדף (סביבת בדיקה) ותיעלם ברענון. המערכת הקודמת נשמרת לשחזור עד הרענון.'
+                : 'המערכת הקודמת נשמרת בגיבוי, ואפשר לשחזר אותה ממסך הייבוא.'}
+            </p>
           </footer>
         )}
       </div>

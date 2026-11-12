@@ -1,21 +1,36 @@
-import { useMemo, type ReactNode } from 'react'
-import { ConvexReactClient, useConvexAuth, useQuery } from 'convex/react'
+import { useEffect, useMemo, useRef } from 'react'
+import { ConvexReactClient, useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react'
 import { anyApi } from 'convex/server'
+import App from '../App'
+import { initialData } from '../data/initial'
+import { emptyData } from '../data/empty'
+import type { ScheduleData } from '../types'
 
 /** כתובת האתר אליה חוזרים אחרי ההתחברות עם Google */
 const siteUrl = () => new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/, '')
 
-export function AuthRoot({ url, children }: { url: string; children: ReactNode }) {
+/** האתר פתוח לכולם. ההתחברות רק מוסיפה אפשרות לבעלים, ואינה חוסמת אף אחד */
+export function AuthRoot({ url }: { url: string }) {
   const client = useMemo(() => new ConvexReactClient(url), [url])
   return (
     <ConvexAuthProvider client={client}>
-      <AuthGate>{children}</AuthGate>
+      <Router />
     </ConvexAuthProvider>
   )
 }
 
-function AuthGate({ children }: { children: ReactNode }) {
+function Loading() {
+  return (
+    <main className="auth-screen">
+      <p className="muted" role="status">
+        טוען…
+      </p>
+    </main>
+  )
+}
+
+function Router() {
   const { isLoading, isAuthenticated } = useConvexAuth()
   const { signIn, signOut } = useAuthActions()
   const me = useQuery(anyApi.users.me, isAuthenticated ? {} : 'skip') as
@@ -23,58 +38,55 @@ function AuthGate({ children }: { children: ReactNode }) {
     | null
     | undefined
 
-  if (isLoading || (isAuthenticated && me === undefined)) {
-    return (
-      <main className="auth-screen">
-        <p className="muted" role="status">
-          טוען…
-        </p>
-      </main>
-    )
-  }
+  // מחובר לחשבון שאינו המורשה (לא אמור לקרות, השרת חוסם): מנתקים ומציגים סביבת בדיקה
+  const wrongAccount = isAuthenticated && me !== undefined && !(me?.isOwner && me.email)
+  useEffect(() => {
+    if (wrongAccount) void signOut()
+  }, [wrongAccount, signOut])
 
-  if (!isAuthenticated) {
-    return (
-      <main className="auth-screen">
-        <div className="auth-card">
-          <h1>המערכת שלי</h1>
-          <p className="muted">האתר פרטי. הכניסה רק עם חשבון Google של הבעלים.</p>
-          <button type="button" className="btn btn-primary" onClick={() => void signIn('google', { redirectTo: siteUrl() })}>
-            כניסה עם Google
-          </button>
-        </div>
-      </main>
-    )
-  }
+  if (isLoading || (isAuthenticated && me === undefined)) return <Loading />
 
-  if (!me?.isOwner) {
-    return (
-      <main className="auth-screen">
-        <div className="auth-card">
-          <h1>אין הרשאה</h1>
-          <p className="muted">
-            {me?.email ? (
-              <>
-                החשבון <bdi dir="ltr">{me.email}</bdi> לא מורשה להיכנס לאתר.
-              </>
-            ) : (
-              'החשבון הזה לא מורשה להיכנס לאתר.'
-            )}
-          </p>
-          <button type="button" className="btn" onClick={() => void signOut()}>
-            התנתקות
-          </button>
-        </div>
-      </main>
-    )
+  if (isAuthenticated && me?.isOwner && me.email) {
+    return <OwnerApp email={me.email} signOut={() => void signOut()} />
   }
 
   return (
-    <>
-      {children}
-      <button type="button" className="link-btn auth-out" onClick={() => void signOut()}>
-        התנתקות
-      </button>
-    </>
+    <App
+      initialData={emptyData}
+      initialBackup={null}
+      account={{
+        kind: 'guest',
+        signIn: () => void signIn('google', { redirectTo: siteUrl() }),
+      }}
+    />
+  )
+}
+
+/** הבעלים: טוען את המערכת מהשרת ושומר אליו כל שינוי */
+function OwnerApp({ email, signOut }: { email: string; signOut: () => void }) {
+  const doc = useQuery(anyApi.schedule.get, {}) as
+    | { data: ScheduleData; backup: ScheduleData | null }
+    | null
+    | undefined
+  const save = useMutation(anyApi.schedule.save)
+  const seeded = useRef(false)
+
+  // בכניסה הראשונה אין עדיין מערכת בשרת: מתחילים מהמערכת האישית ושומרים אותה
+  useEffect(() => {
+    if (doc === null && !seeded.current) {
+      seeded.current = true
+      void save({ data: initialData, backup: null })
+    }
+  }, [doc, save])
+
+  if (doc === undefined) return <Loading />
+
+  return (
+    <App
+      initialData={doc?.data ?? initialData}
+      initialBackup={doc?.backup ?? null}
+      account={{ kind: 'owner', email, signOut }}
+      onPersist={(data, backup) => void save({ data, backup })}
+    />
   )
 }

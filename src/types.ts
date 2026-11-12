@@ -49,6 +49,18 @@ export interface ChoiceGroup {
   chosenLessonId: string | null
 }
 
+/**
+ * חלון תרגול חופשי: זמן קבוע במערכת שהתוכן שלו פתוח.
+ * בשלב 4 השיבוץ האוטומטי ימליץ מה לתרגל בו לפי היעדים וההעדפות.
+ */
+export interface PracticeWindow {
+  id: string
+  slot: Slot
+  name: string
+  /** המסגרת שהחלון שייך אליה, למשל שם התכנית */
+  context?: string
+}
+
 /** יעד גמיש לזמן הפנוי (שלב 4) */
 export interface Goal {
   id: string
@@ -77,7 +89,7 @@ export interface Settings {
 
 /**
  * כל מה שנשמר. ההפרדה המרכזית:
- * lessons / entries / choiceGroups / goals = "מה קבוע"
+ * lessons / entries / choiceGroups / practiceWindows / goals = "מה קבוע"
  * events = "מה השבוע הזה"
  */
 export interface ScheduleData {
@@ -85,6 +97,7 @@ export interface ScheduleData {
   lessons: Lesson[]
   entries: FixedEntry[]
   choiceGroups: ChoiceGroup[]
+  practiceWindows: PracticeWindow[]
   goals: Goal[]
   events: OneOffEvent[]
   settings: Settings

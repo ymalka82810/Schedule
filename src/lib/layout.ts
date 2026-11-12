@@ -16,6 +16,8 @@ export interface Block {
   lanes: number
   /** חלק ממשבצת בחירה שעוד לא נבחר בה שיעור */
   isOption: boolean
+  /** חלון תרגול חופשי שהתוכן שלו עוד לא נקבע */
+  isOpen: boolean
 }
 
 /** הופך את הנתונים השמורים לרשימת בלוקים לציור */
@@ -37,6 +39,7 @@ export function buildBlocks(data: ScheduleData): Block[] {
       lane: 0,
       lanes: 1,
       isOption: false,
+      isOpen: false,
     })
   }
 
@@ -56,7 +59,23 @@ export function buildBlocks(data: ScheduleData): Block[] {
         lane: i,
         lanes: ids.length,
         isOption: !g.chosenLessonId,
+        isOpen: false,
       })
+    })
+  }
+
+  // ?? [] כדי שנתונים שנשמרו לפני שהשדה נוסף ימשיכו להיטען
+  for (const w of data.practiceWindows ?? []) {
+    blocks.push({
+      id: w.id,
+      ...w.slot,
+      name: w.name,
+      room: w.context,
+      color: 'teal',
+      lane: 0,
+      lanes: 1,
+      isOption: false,
+      isOpen: true,
     })
   }
 

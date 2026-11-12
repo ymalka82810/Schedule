@@ -310,6 +310,16 @@ p {
   background: color-mix(in oklab, var(--hue) calc(var(--fill-mix) / 2), var(--surface));
 }
 
+/* חלון תרגול חופשי: פסים אלכסוניים, כי התוכן עוד לא נקבע */
+.block.is-open {
+  border: 1.5px dashed var(--hue);
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--hue) var(--fill-mix), var(--surface)) 0 10px,
+    color-mix(in oklab, var(--hue) calc(var(--fill-mix) / 2), var(--surface)) 10px 20px
+  );
+}
+
 .block-tag {
   display: inline-block;
   font-size: 0.75rem;

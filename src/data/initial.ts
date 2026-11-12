@@ -6,6 +6,8 @@ import { hm } from '../lib/time'
  * מקור: "מערכת הנדסה – מעודכנת נכון לתאריך 18.10.2026".
  * קבוצות: מתמטיקה 5 יח׳ (שחק), אנגלית טרום בסיסי א׳ (פרייס), פיזיקה (קסל).
  *
+ * בקרים: תכנית מיגו בימי שני, רביעי וחמישי (לימוד תורה ואז תרגול חופשי).
+ *
  * שיעורים רצופים אוחדו לבלוק אחד; ההפסקות (15:00, 16:45, 18:30) מפרידות בין בלוקים.
  */
 
@@ -21,16 +23,22 @@ const entry = (
   lessonId,
 })
 
+const MIGO_DAYS: DayIndex[] = [1, 3, 4]
+
 export const initialData: ScheduleData = {
   version: 1,
   lessons: [
     { id: 'math', name: 'מתמטיקה', teacher: 'רונן שחק', room: 'סמסון 177', color: 'cobalt' },
     { id: 'physics', name: 'פיזיקה', teacher: 'דוד קסל', room: 'ויילר 243', color: 'coral' },
     { id: 'english', name: 'אנגלית', teacher: 'שרגא פרייס', room: 'ויילר 243', color: 'amber' },
+    { id: 'migo', name: 'לימוד תורה', room: 'תכנית מיגו', color: 'plum' },
     // הנחה: קבוצה 3, כי קבוצות 1 ו-2 מתנגשות עם האנגלית של פרייס ביום ראשון
     { id: 'writing', name: 'כתיבה מדעית', teacher: 'דניאל מנחם', color: 'moss' },
   ],
   entries: [
+    // מיגו: שני, רביעי, חמישי
+    ...MIGO_DAYS.map((day) => entry(day, 'migo', [10, 0], [11, 15])),
+
     // ראשון
     entry(0, 'math', [13, 30], [15, 0]),
     entry(0, 'math', [15, 15], [16, 45]),
@@ -65,7 +73,13 @@ export const initialData: ScheduleData = {
     entry(4, 'math', [17, 0], [17, 45]),
   ],
   choiceGroups: [],
+  practiceWindows: MIGO_DAYS.map((day) => ({
+    id: `p${day}`,
+    slot: { day, start: hm(11, 15), end: hm(13) },
+    name: 'תרגול חופשי',
+    context: 'תכנית מיגו',
+  })),
   goals: [],
   events: [],
-  settings: { dayStart: hm(12), dayEnd: hm(21) },
+  settings: { dayStart: hm(9), dayEnd: hm(21) },
 }

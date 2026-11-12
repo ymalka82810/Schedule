@@ -79,10 +79,11 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${duration < 60 ? ' is-short' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}`}
                     style={style}
                   >
                     {b.isOption && <span className="block-tag">לבחירה</span>}
+                    {b.isOpen && <span className="block-tag">לבחירתך</span>}
                     <h3 className="block-name">{b.name}</h3>
                     <p className="block-time">
                       <bdi dir="ltr">

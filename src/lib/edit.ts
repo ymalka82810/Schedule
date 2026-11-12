@@ -64,7 +64,7 @@ export function resolveBlock(data: ScheduleData, blockId: string, plan: PlannedS
   return null
 }
 
-const newId = (prefix: string, taken: Iterable<string>) => {
+export const newId = (prefix: string, taken: Iterable<string>) => {
   const used = new Set(taken)
   let n = 1
   while (used.has(`${prefix}${n}`)) n++
@@ -179,18 +179,6 @@ export function saveEvent(data: ScheduleData, ev: Omit<OneOffEvent, 'id'> & { id
 
 export function removeEvent(data: ScheduleData, id: string): ScheduleData {
   return { ...data, events: data.events.filter((e) => e.id !== id) }
-}
-
-/** סימון שתרגלתי מפגש מתוכנן, או ביטול הסימון */
-export function toggleDone(
-  data: ScheduleData,
-  session: { id: string; goalId: string; start: number; end: number; done?: boolean },
-  date: string,
-): ScheduleData {
-  const log = data.log ?? []
-  if (session.done) return { ...data, log: log.filter((l) => l.id !== session.id) }
-  const id = newId('done', log.map((l) => l.id))
-  return { ...data, log: [...log, { id, goalId: session.goalId, date, start: session.start, end: session.end }] }
 }
 
 export function saveBreak(data: ScheduleData, b: Omit<Break, 'id'>): ScheduleData {
@@ -310,6 +298,7 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     ...(Array.isArray(data.cancellations) ? { cancellations: data.cancellations as ScheduleData['cancellations'] } : {}),
     ...(isObj(data.plan) ? { plan: data.plan as unknown as ScheduleData['plan'] } : {}),
     ...(Array.isArray(data.log) ? { log: data.log as ScheduleData['log'] } : {}),
+    ...(Array.isArray(data.reviews) ? { reviews: data.reviews as ScheduleData['reviews'] } : {}),
     ...(Array.isArray(data.breaks) ? { breaks: data.breaks as ScheduleData['breaks'] } : {}),
     settings: data.settings as unknown as ScheduleData['settings'],
   }

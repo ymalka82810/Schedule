@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import type { DayIndex, Goal, PlanSettings, ScheduleData } from '../types'
+import type { DayIndex, Goal, GoalKind, PlanSettings, ScheduleData } from '../types'
+import { KINDS, blocksOf, removeReview, sessionLength } from '../lib/learning'
 import { removeGoal, saveGoal, savePlanSettings } from '../lib/edit'
 import { planSettings, planWeek, subjectNames } from '../lib/plan'
 import { DAYS, DAY_NAMES, fromTimeInput, toTimeInput } from '../lib/time'
@@ -10,6 +11,8 @@ import { useEscape } from './useEscape'
 interface Props {
   data: ScheduleData
   weekStart: Date
+  /** YYYY-MM-DD */
+  today?: string
   onSave: (data: ScheduleData) => void
   onClose: () => void
 }
@@ -30,11 +33,11 @@ const newGoal = (): Omit<Goal, 'id'> => ({
 })
 
 /** יעדים גמישים לשבוע, והגדרות התכנון. השינויים נשמרים רק בלחיצה על שמירה */
-export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
+export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) {
   useEscape(onClose)
   const [draft, setDraft] = useState(data)
   const [openId, setOpenId] = useState<string | null>(null)
-  const plan = useMemo(() => planWeek(draft, weekStart), [draft, weekStart])
+  const plan = useMemo(() => planWeek(draft, weekStart, today), [draft, weekStart, today])
   const settings = planSettings(draft)
   const subjects = useMemo(() => subjectNames(draft.lessons), [draft.lessons])
 
@@ -70,7 +73,8 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
         <div className="dialog-body goals">
           <p className="muted">
             כמה זמן בשבוע לכל דבר, והמערכת מוצאת לבד מתי: רק בזמן פנוי, עם הפסקות, מפוזר על השבוע. תרגול של מקצוע נקבע
-            אחרי השיעור או ערב לפני השיעור הבא. בכל שבוע התכנון מתעדכן לפי אירועים וביטולים.
+            אחרי השיעור או ערב לפני השיעור הבא. בכל שבוע התכנון מתעדכן לפי אירועים וביטולים. כשבוחרים ליעד סוג למידה, התכנון
+            עובד לפי מה שהמחקר על למידה מראה: אורך מפגש מתאים, פיזור, ערבוב, וחזרות מרווחות.
           </p>
 
           {draft.goals.length === 0 && <p>עוד אין יעדים. הוסף יעד ראשון, למשל "תרגול פיזיקה, 4 שעות".</p>}
@@ -87,10 +91,13 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                   aria-expanded={open}
                   onClick={() => setOpenId(open ? null : g.id)}
                 >
-                  <span className="goal-name">{g.name || 'יעד בלי שם'}</span>
+                  <span className="goal-name">
+                    {g.name || 'יעד בלי שם'}
+                    {g.kind && <span className="goal-kind">{KINDS[g.kind].label}</span>}
+                  </span>
                   <span className={short ? 'goal-status is-short' : 'goal-status'}>
                     {r
-                      ? `${hours(r.planned)} מתוך ${hours(r.min)}–${hours(r.max)} שעות השבוע${r.done ? `, בוצעו ${hours(r.done)}` : ''}`
+                      ? `${hours(r.planned)} מתוך ${hours(r.min)}–${hours(r.max)} שעות השבוע${r.done ? `, בוצעו ${hours(r.done)}` : ''}${r.reviews ? `, חזרות ${r.reviewsDone} מתוך ${r.reviews}` : ''}`
                       : ''}
                   </span>
                 </button>
@@ -108,6 +115,34 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                       <span>שם</span>
                       <input type="text" value={g.name} onChange={(e) => updateGoal(g, { name: e.target.value })} />
                     </label>
+                    <fieldset className="kind-pick">
+                      <legend>סוג הלמידה</legend>
+                      <div className="whoami-chips">
+                        {([undefined, 'knowledge', 'skill', 'creative'] as (GoalKind | undefined)[]).map((k) => (
+                          <label key={k ?? 'none'} className="chip">
+                            <input
+                              type="radio"
+                              name={`kind-${g.id}`}
+                              checked={g.kind === k}
+                              onChange={() =>
+                                updateGoal(
+                                  g,
+                                  k
+                                    ? { kind: k, sessionMinutes: KINDS[k].session, maxPerDay: KINDS[k].maxPerDay }
+                                    : { kind: undefined },
+                                )
+                              }
+                            />
+                            <span>{k ? KINDS[k].label : 'בלי סוג'}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="muted">
+                        {g.kind
+                          ? KINDS[g.kind].describe
+                          : 'בלי כללי למידה מיוחדים: רק זמן פנוי ופיזור. מתאים לאימון כושר או לקריאה להנאה.'}
+                      </p>
+                    </fieldset>
                     <label className="field">
                       <span>קשור למקצוע</span>
                       <select
@@ -156,7 +191,7 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                           value={g.sessionMinutes ?? 60}
                           onChange={(e) => updateGoal(g, { sessionMinutes: Number(e.target.value) })}
                         >
-                          {[30, 45, 60, 90, 120].map((m) => (
+                          {[...new Set([25, 30, 45, 50, 60, 90, 120, sessionLength(g)])].sort((a, b) => a - b).map((m) => (
                             <option key={m} value={m}>
                               {m} דקות
                             </option>
@@ -177,6 +212,45 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                         </select>
                       </label>
                     </div>
+                    {(() => {
+                      const b = blocksOf(g.kind, sessionLength(g))
+                      return b ? (
+                        <p className="muted">
+                          מפגש של {sessionLength(g)} דקות מתחלק ל-{b.count} בלוקים של כ-{b.each} דקות, עם {b.rest} דקות הפסקה
+                          ביניהם. ריכוז נשחק אחרי כ-50 דקות.
+                        </p>
+                      ) : null
+                    })()}
+                    {g.kind && KINDS[g.kind].dailyCap < 24 * 60 && (
+                      <p className="muted">
+                        לכל היותר {hours(KINDS[g.kind].dailyCap)} שעות ביום ביעד הזה: מעבר לזה התרגול כבר כמעט לא מוסיף.
+                      </p>
+                    )}
+                    {(draft.reviews ?? []).some((rv) => rv.goalId === g.id) && (
+                      <div>
+                        <p className="muted">חזרות מרווחות שממתינות:</p>
+                        <ul className="review-list">
+                          {(draft.reviews ?? [])
+                            .filter((rv) => rv.goalId === g.id)
+                            .sort((a, b) => a.due.localeCompare(b.due))
+                            .map((rv) => (
+                              <li key={rv.id}>
+                                <span>
+                                  {rv.topic}: חזרה {rv.step + 1}, ב-{rv.due.slice(8).replace(/^0/, '')}.
+                                  {rv.due.slice(5, 7).replace(/^0/, '')}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="link-btn"
+                                  onClick={() => setDraft((d) => removeReview(d, rv.id))}
+                                >
+                                  הפסקת החזרות
+                                </button>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
                     <DayPicker
                       legend="רק בימים (בלי סימון: כל יום)"
                       value={g.days ?? []}
@@ -288,6 +362,37 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                 <span>בשישי עד</span>
                 {time(settings.fridayEnd, (m) => setPlan({ fridayEnd: m }))}
               </label>
+            )}
+            <label className="import-filter">
+              <input
+                type="checkbox"
+                checked={settings.sharpFrom !== undefined}
+                onChange={(e) =>
+                  setPlan(
+                    e.target.checked
+                      ? { sharpFrom: 9 * 60, sharpTo: 13 * 60 }
+                      : { sharpFrom: undefined, sharpTo: undefined },
+                  )
+                }
+              />
+              יש לי שעות שבהן אני חד במיוחד
+            </label>
+            {settings.sharpFrom !== undefined && (
+              <>
+                <div className="edit-row">
+                  <label className="field">
+                    <span>חד מ-</span>
+                    {time(settings.sharpFrom, (m) => setPlan({ sharpFrom: m }))}
+                  </label>
+                  <label className="field">
+                    <span>עד</span>
+                    {time(settings.sharpTo ?? settings.dayEnd, (m) => setPlan({ sharpTo: m }))}
+                  </label>
+                </div>
+                <p className="muted">
+                  למידה קשה של יעדים עם סוג מושמת בשעות האלה, וחזרות קלות בשעות העייפות.
+                </p>
+              </>
             )}
             <p className="muted">ימים בלי תכנון:</p>
             <div className="whoami-chips">

@@ -56,7 +56,8 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   }, [])
 
   // התכנון של הזמן הפנוי מחושב מחדש לכל שבוע: אירועים וביטולים משנים אותו
-  const plan = useMemo(() => planWeek(data, weekStart), [data, weekStart])
+  const todayIso = isoDate(now)
+  const plan = useMemo(() => planWeek(data, weekStart, todayIso), [data, weekStart, todayIso])
   const blocks = useMemo(() => buildBlocks(data, { weekStart, plan: plan.sessions }), [data, weekStart, plan])
 
   const dayNotes = useMemo(() => {
@@ -71,13 +72,13 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   // לכרטיס "היום": תמיד השבוע של היום והשבוע שאחריו, בלי קשר לשבוע המוצג
   const thisWeek = useMemo(() => startOfWeek(now), [now])
   const todayBlocks = useMemo(
-    () => buildBlocks(data, { weekStart: thisWeek, plan: planWeek(data, thisWeek).sessions }),
-    [data, thisWeek],
+    () => buildBlocks(data, { weekStart: thisWeek, plan: planWeek(data, thisWeek, todayIso).sessions }),
+    [data, thisWeek, todayIso],
   )
   const nextWeekBlocks = useMemo(() => {
     const w = addDays(thisWeek, 7)
-    return buildBlocks(data, { weekStart: w, plan: planWeek(data, w).sessions })
-  }, [data, thisWeek])
+    return buildBlocks(data, { weekStart: w, plan: planWeek(data, w, todayIso).sessions })
+  }, [data, thisWeek, todayIso])
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
   const isEmpty = blocks.length === 0
 
@@ -141,7 +142,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   const openBlock = (blockId: string) => openBlockIn(blockId, weekStart)
 
   function openBlockIn(blockId: string, week: Date) {
-    const sessions = week === weekStart ? plan.sessions : planWeek(data, week).sessions
+    const sessions = week === weekStart ? plan.sessions : planWeek(data, week, todayIso).sessions
     const target = resolveBlock(data, blockId, sessions)
     if (!target) return
     if (target.kind === 'event') setDialog({ kind: 'event', event: target.event })
@@ -324,7 +325,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         />
       )}
       {dialog?.kind === 'goals' && (
-        <GoalsDialog data={data} weekStart={weekStart} onSave={handleEdit} onClose={() => setDialog(null)} />
+        <GoalsDialog data={data} weekStart={weekStart} today={todayIso} onSave={handleEdit} onClose={() => setDialog(null)} />
       )}
 
       {toast && history.length > 0 && (

@@ -1365,3 +1365,65 @@ p {
   border-color: var(--accent);
   color: var(--ink);
 }
+
+/* ---------- מנוע הלמידה ---------- */
+.goal-kind {
+  margin-inline-start: 0.5rem;
+  padding: 0.0625rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.kind-pick,
+.session-log {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.kind-pick legend,
+.session-log legend {
+  margin-bottom: 0.375rem;
+  font-weight: 600;
+}
+
+.kind-pick p {
+  margin: 0;
+}
+
+.session-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-tip {
+  padding: 0.5rem 0.75rem;
+  border-inline-start: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-radius: 0.375rem;
+}
+
+.session-tip p {
+  margin: 0.125rem 0;
+}
+
+.review-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+}
+
+.review-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--line);
+}

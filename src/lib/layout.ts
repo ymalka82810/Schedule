@@ -148,7 +148,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       day: p.day,
       start: p.start,
       end: p.end,
-      name: g.name,
+      name: p.title ?? g.name,
       color: g.color,
       lane: 0,
       lanes: 1,

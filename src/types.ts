@@ -70,10 +70,23 @@ export interface PracticeWindow {
   context?: string
 }
 
+/**
+ * סוג הלמידה של יעד. לכל סוג כללי תכנון משלו, לפי המחקר על למידה:
+ * knowledge = ידע (עובדות, מושגים, אוצר מילים): מפגשים קצרים ותכופים וחזרות מרווחות
+ * skill = מיומנות (נגינה, ספורט, פתרון תרגילים): בלוקים מרוכזים, עד כשעה וחצי ביום
+ * creative = יצירה (כתיבה, פרויקט): בלוקים ארוכים ורצופים של עבודה עמוקה
+ */
+export type GoalKind = 'knowledge' | 'skill' | 'creative'
+
+/** איך הרגיש המפגש: מקצר או מאריך את המרווח לחזרה הבאה */
+export type Rating = 'easy' | 'ok' | 'hard'
+
 /** יעד גמיש לזמן הפנוי (שלב 4): המערכת משבצת אותו לבד בזמן הפנוי של כל שבוע */
 export interface Goal {
   id: string
   name: string
+  /** סוג הלמידה. חסר = בלי כללים מיוחדים (כמו לפני שהשדה נוסף) */
+  kind?: GoalKind
   color: ColorKey
   minHoursPerWeek: number
   maxHoursPerWeek: number
@@ -110,6 +123,32 @@ export interface PracticeLog {
   date: string
   start: Minutes
   end: Minutes
+  /** תיעוד של דקה אחרי המפגש */
+  rating?: Rating
+  /** מה למדתי או תרגלתי. ביעד ידע זה יוצר חזרות מרווחות */
+  topic?: string
+  /** איפה נתקעתי */
+  stuck?: string
+  /** המפגש היה חזרה על נושא (מזהה החזרה) */
+  reviewId?: string
+  /** החזרה כפי שהייתה לפני הסימון, כדי שביטול הסימון יחזיר אותה */
+  reviewBefore?: Review
+}
+
+/**
+ * חזרה מרווחת על נושא: נוצרת כשמסיימים מפגש עם נושא חדש ביעד ידע.
+ * תמיד נשמרת רק החזרה הבאה בשרשרת. חזרה שדילגו עליה נדחית ולא נעלמת.
+ */
+export interface Review {
+  id: string
+  goalId: string
+  topic: string
+  /** YYYY-MM-DD: מתי לחזור */
+  due: string
+  /** מספר החזרה בשרשרת, מ-0 */
+  step: number
+  /** המפגש שיצר את השרשרת. ביטול הסימון שלו מוחק אותה */
+  fromLogId?: string
 }
 
 /** איך מתכננים את הזמן הפנוי */
@@ -125,6 +164,9 @@ export interface PlanSettings {
   offDays: DayIndex[]
   /** כמה שעות תרגול לכל היותר ביום */
   maxHoursPerDay: number
+  /** השעות שבהן אני חד: למידה קשה מושמת שם, ותרגול קל בשעות העייפות. חסר = אין העדפה */
+  sharpFrom?: Minutes
+  sharpTo?: Minutes
 }
 
 /** אירוע חד-פעמי, שייך לתאריך מסוים ולא למערכת הקבועה (שלב 3) */
@@ -173,6 +215,8 @@ export interface ScheduleData {
   breaks?: Break[]
   /** מפגשי תרגול שסומנו כבוצעו */
   log?: PracticeLog[]
+  /** חזרות מרווחות שממתינות */
+  reviews?: Review[]
   settings: Settings
   /** הגדרות תכנון הזמן הפנוי. חסר = ברירת המחדל */
   plan?: PlanSettings

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import type { OneOffEvent, ScheduleData } from '../types'
 import type { PlannedSession } from '../lib/plan'
-import type { Goal } from '../types'
-import { removeBreak, removeEvent, saveBreak, saveEvent, slotProblem, toggleDone } from '../lib/edit'
+import type { Goal, Rating } from '../types'
+import { removeBreak, removeEvent, saveBreak, saveEvent, slotProblem } from '../lib/edit'
+import { INTERVALS, KINDS, REVIEW_TIP, blocksOf, intervalText, logReview, logSession, nextReview, unlogSession } from '../lib/learning'
 import { subjectNames } from '../lib/plan'
 import { DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
 import { useEscape } from './useEscape'
@@ -204,21 +205,56 @@ interface SessionProps {
   onClose: () => void
 }
 
-/** מפגש שתוכנן אוטומטית: מתי ולמה דווקא שם */
+const RATINGS: { value: Rating; label: string }[] = [
+  { value: 'easy', label: 'קל מדי' },
+  { value: 'ok', label: 'מתאים' },
+  { value: 'hard', label: 'קשה מדי' },
+]
+
+const RATING_LABEL: Record<Rating, string> = { easy: 'קל מדי', ok: 'מתאים', hard: 'קשה מדי' }
+
+/** מפגש שתוכנן אוטומטית: מתי ולמה דווקא שם, איך לעבוד בו, ותיעוד של דקה בסיום */
 export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, onClose }: SessionProps) {
   useEscape(onClose)
+  const [rating, setRating] = useState<Rating | undefined>()
+  const [topic, setTopic] = useState('')
+  const [stuck, setStuck] = useState('')
+  const review = session.reviewId ? (data.reviews ?? []).find((r) => r.id === session.reviewId) : undefined
+  const logged = session.logId ? (data.log ?? []).find((l) => l.id === session.logId) : undefined
+  const isReview = !!session.reviewId
+  const len = session.end - session.start
+  const blocks = isReview ? null : blocksOf(goal.kind, len)
+  const tip = isReview ? REVIEW_TIP : goal.kind ? KINDS[goal.kind].tip : null
+
+  const save = () => {
+    if (review) onSave(logReview(data, review, session, date, { rating: rating ?? 'ok', stuck }))
+    else onSave(logSession(data, session, date, { rating, topic, stuck }))
+  }
+
+  /** מה יקרה עם החזרה הבאה, לפי הדירוג שנבחר */
+  const nextNote = (() => {
+    if (review) {
+      const next = nextReview(review, rating ?? 'ok', date)
+      return next ? `החזרה הבאה: ${intervalText(INTERVALS[next.step])}.` : 'זו החזרה האחרונה על הנושא. הוא אמור להישאר בזיכרון לאורך זמן.'
+    }
+    if (goal.kind === 'knowledge' && topic.trim()) {
+      return `ייווצרו חזרות קצרות על הנושא: ${rating === 'easy' ? 'אחרי שלושה ימים' : 'מחר'}, ואחר כך במרווחים שהולכים וגדלים.`
+    }
+    return null
+  })()
+
   return (
     <div className="dialog-backdrop" role="presentation">
       <div className="dialog dialog-compact" role="dialog" aria-modal="true" aria-labelledby="session-title">
         <header className="dialog-head">
-          <h2 id="session-title">{goal.name}</h2>
+          <h2 id="session-title">{session.title ?? goal.name}</h2>
           <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>
             ×
           </button>
         </header>
         <div className="dialog-body lesson-form">
           <p>
-            יום {DAY_NAMES[session.day]},{' '}
+            {isReview ? `${goal.name}, ` : ''}יום {DAY_NAMES[session.day]},{' '}
             <bdi dir="ltr">
               {formatTime(session.start)}–{formatTime(session.end)}
             </bdi>
@@ -231,15 +267,77 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
               ))}
             </ul>
           </div>
-          <p className="muted">
-            {session.done
-              ? 'סימנת שתרגלת. המפגש נשאר במקומו, ושאר השבוע מתוכנן סביבו.'
-              : 'המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.'}
-          </p>
+          {(tip || blocks) && !session.done && (
+            <div className="session-tip">
+              <p className="muted">איך לעבוד:</p>
+              {blocks && (
+                <p>
+                  {blocks.count} בלוקים של כ-{blocks.each} דקות, עם {blocks.rest} דקות הפסקה ביניהם.
+                </p>
+              )}
+              {tip && <p>{tip}</p>}
+            </div>
+          )}
+
+          {session.done ? (
+            <>
+              <p className="muted">
+                {isReview ? 'סימנת שחזרת.' : 'סימנת שתרגלת. המפגש נשאר במקומו, ושאר השבוע מתוכנן סביבו.'}
+              </p>
+              {logged && (logged.rating || logged.topic || logged.stuck) && (
+                <ul className="whoami-conflicts">
+                  {logged.rating && <li>הרגיש: {RATING_LABEL[logged.rating]}</li>}
+                  {logged.topic && !isReview && <li>נושא: {logged.topic}</li>}
+                  {logged.stuck && <li>נתקעתי ב: {logged.stuck}</li>}
+                </ul>
+              )}
+            </>
+          ) : (
+            <fieldset className="session-log">
+              <legend>{isReview ? 'אחרי החזרה' : 'אחרי המפגש (דקה, לא חובה)'}</legend>
+              <p className="muted">איך היה?</p>
+              <div className="whoami-chips">
+                {RATINGS.map((r) => (
+                  <label key={r.value} className="chip">
+                    <input
+                      type="radio"
+                      name="rating"
+                      checked={rating === r.value}
+                      onChange={() => setRating(r.value)}
+                    />
+                    <span>{r.label}</span>
+                  </label>
+                ))}
+              </div>
+              {!isReview && (
+                <label className="field">
+                  <span>{goal.kind === 'knowledge' ? 'מה למדתי (נושא חדש יקבל חזרות מרווחות)' : 'מה עשיתי'}</span>
+                  <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} />
+                </label>
+              )}
+              <label className="field">
+                <span>איפה נתקעתי</span>
+                <input type="text" value={stuck} onChange={(e) => setStuck(e.target.value)} />
+              </label>
+              {nextNote && <p className="whoami-auto">{nextNote}</p>}
+            </fieldset>
+          )}
+
+          {!session.done && !isReview && (
+            <p className="muted">המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.</p>
+          )}
           <div className="import-actions">
-            <button type="button" className="btn btn-primary" onClick={() => onSave(toggleDone(data, session, date))}>
-              {session.done ? 'ביטול הסימון' : 'תרגלתי ✓'}
-            </button>
+            {session.done ? (
+              session.logId && (
+                <button type="button" className="btn" onClick={() => onSave(unlogSession(data, session.logId!))}>
+                  ביטול הסימון
+                </button>
+              )
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={save} disabled={isReview && !review}>
+                {isReview ? 'חזרתי ✓' : 'תרגלתי ✓'}
+              </button>
+            )}
             <button type="button" className="btn" onClick={onEditGoals}>
               עריכת היעדים
             </button>

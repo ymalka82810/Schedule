@@ -1,12 +1,15 @@
 import type { DayIndex, Goal, Lesson, Minutes, PlanSettings, ScheduleData } from '../types'
 import { DAY_NAMES, dateOfDay, formatTime } from './time'
 import { isChag, isErev } from './hebrew'
+import { INTERVALS, KINDS, REVIEW_MINUTES, intervalText, maxPerDay, sessionLength } from './learning'
 
 /**
  * תכנון הזמן הפנוי (שלב 4). לכל שבוע מחשבים מחדש איפה לשבץ את היעדים הגמישים:
  * רק בזמן פנוי, עם הפסקות, בלי שבת, ולפי מה שבאמת עוזר ללמידה: תרגול אחרי השיעור
  * או ערב לפני השיעור הבא, פיזור על פני השבוע, וחלונות התרגול (מיגו) קודם.
  * כל שיבוץ מגיע עם הסבר למה הוא שם.
+ * ליעד עם סוג למידה (ידע / מיומנות / יצירה) נוספים כללי מנוע הלמידה: אורך מפגש ותקרה יומית לפי הסוג,
+ * יום הפסקה מהתחום, ערבוב תחומים באותו יום, למידה קשה בשעות החדות, וחזרות מרווחות בתאריך שלהן.
  */
 
 export const DEFAULT_PLAN: PlanSettings = {
@@ -39,6 +42,12 @@ export interface PlannedSession {
   reasons: string[]
   /** סומן שתרגלתי */
   done?: boolean
+  /** שם להצגה במקום שם היעד (חזרה על נושא) */
+  title?: string
+  /** מפגש חזרה מרווחת: מזהה החזרה */
+  reviewId?: string
+  /** מזהה הרישום ביומן, במפגש שסומן */
+  logId?: string
 }
 
 export interface GoalReport {
@@ -52,6 +61,9 @@ export interface GoalReport {
   max: Minutes
   /** למה היעד גדל השבוע, אם גדל (מבחן קרוב) */
   boost?: string
+  /** חזרות מרווחות השבוע: כמה מתוכננות (כולל שבוצעו) וכמה בוצעו */
+  reviews: number
+  reviewsDone: number
 }
 
 export interface WeekPlan {
@@ -161,6 +173,7 @@ export function freeTime(data: ScheduleData, weekStart: Date, busy = busyForWeek
 }
 
 const sameName = (a: string, b: string) => a.trim() === b.trim()
+const start9 = (t: Minutes) => t < 9 * 60
 
 interface Candidate {
   day: DayIndex
@@ -169,8 +182,11 @@ interface Candidate {
   reasons: string[]
 }
 
-/** מתכנן שבוע: ממלא קודם את המינימום של כל יעד, ואז, אם יש מקומות טובים, עד המקסימום */
-export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
+/**
+ * מתכנן שבוע: קודם החזרות המרווחות (יש להן תאריך), אחר כך המינימום של כל יעד, ואז, אם יש מקומות טובים, עד המקסימום.
+ * today (YYYY-MM-DD): חזרה שהתאריך שלה עבר ולא בוצעה נדחית להיום, ולא נעלמת.
+ */
+export function planWeek(data: ScheduleData, weekStart: Date, today?: string): WeekPlan {
   const s = planSettings(data)
   const goals = data.goals.filter((g) => g.maxHoursPerWeek > 0 || g.minHoursPerWeek > 0)
   const busy = busyForWeek(data, weekStart)
@@ -186,7 +202,17 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
   for (const l of data.log ?? []) {
     const day = DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === l.date)
     if (day === undefined || !goals.some((g) => g.id === l.goalId)) continue
-    sessions.push({ id: l.id, goalId: l.goalId, day, start: l.start, end: l.end, reasons: ['סימנת שתרגלת'], done: true })
+    sessions.push({
+      id: l.id,
+      logId: l.id,
+      goalId: l.goalId,
+      day,
+      start: l.start,
+      end: l.end,
+      reasons: [l.reviewId ? 'סימנת שחזרת' : 'סימנת שתרגלת'],
+      done: true,
+      ...(l.reviewId ? { reviewId: l.reviewId, title: `חזרה: ${l.topic ?? ''}` } : {}),
+    })
     free[day] = subtract(free[day], { start: l.start - s.breakMinutes, end: l.end + s.breakMinutes })
   }
   const minutesOf = (goalId: string) =>
@@ -207,22 +233,60 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
     Math.max(minOf(g), Math.round(g.maxHoursPerWeek * (boosts.get(g.id)?.factor ?? 1) * 2) / 2)
 
   const lengthOf = (g: Goal, target: Minutes) => {
-    const len = g.sessionMinutes ?? 60
+    const len = sessionLength(g)
     const left = target - minutesOf(g.id)
     // השארית האחרונה יכולה להיות קצרה יותר, אבל לא פחות מחצי שעה
     return Math.max(30, Math.min(len, left))
   }
 
-  const score = (g: Goal, day: DayIndex, start: Minutes, len: Minutes): Candidate | null => {
+  const goalName = new Map(goals.map((g) => [g.id, g.name]))
+  const sharp = s.sharpFrom !== undefined && s.sharpTo !== undefined && s.sharpTo > s.sharpFrom
+  const inSharp = (start: Minutes, end: Minutes) => sharp && start >= s.sharpFrom! && end <= s.sharpTo!
+  const goalMinutesOn = (goalId: string, day: DayIndex) =>
+    sessions.filter((x) => x.day === day && x.goalId === goalId).reduce((m, x) => m + x.end - x.start, 0)
+
+  /** כללי מנוע הלמידה: פיזור, ערבוב, שעות חדות ובלוק רצוף. לא חל על יעד בלי סוג */
+  const learningScore = (g: Goal, day: DayIndex, start: Minutes, end: Minutes, f: Interval) => {
+    let sc = 0
+    const reasons: string[] = []
+    if (!g.kind) return { sc, reasons }
+    const mine = sessions.filter((x) => x.goalId === g.id)
+    const near = mine.some((x) => Math.abs(x.day - day) === 1)
+    if (near) sc -= 1
+    else if (mine.some((x) => x.day !== day)) reasons.push('יום הפסקה מהמפגש הקודם (פיזור בזמן משפר זכירה)')
+
+    const sameDay = sessions.filter((x) => x.day === day)
+    const touching = (x: PlannedSession) => x.end + s.breakMinutes === start || end + s.breakMinutes === x.start
+    if (sameDay.some((x) => x.goalId === g.id && touching(x))) sc -= 3
+    const other = sameDay.find((x) => x.goalId !== g.id && !x.reviewId)
+    if (other) {
+      sc += 1
+      reasons.push(`ערבוב: באותו יום גם ${goalName.get(other.goalId) ?? ''}`)
+    }
+    if (inSharp(start, end)) {
+      sc += 2
+      reasons.push('בשעות שבהן אתה חד: למידה קשה בשעות הטובות')
+    }
+    if (g.kind === 'creative' && f.end - f.start >= end - start + 60) {
+      sc += 2
+      reasons.push('רצף ארוך בלי הפרעות לעבודה עמוקה')
+    }
+    return { sc, reasons }
+  }
+
+  const score = (g: Goal, day: DayIndex, start: Minutes, len: Minutes, f: Interval): Candidate | null => {
     const end = start + len
     if (g.days?.length && !g.days.includes(day)) return null
     if (g.earliest !== undefined && start < g.earliest) return null
     if (g.latest !== undefined && end > g.latest) return null
-    const today = sessions.filter((x) => x.day === day && x.goalId === g.id).length
-    if (today >= (g.maxPerDay ?? 1)) return null
+    const today = sessions.filter((x) => x.day === day && x.goalId === g.id && !x.reviewId).length
+    if (today >= maxPerDay(g)) return null
     if (dayLoad(day) + len > s.maxHoursPerDay * 60) return null
+    // מעבר לתקרה היומית של הסוג, תרגול נוסף באותו יום כבר לא מועיל
+    if (g.kind && goalMinutesOn(g.id, day) + len > KINDS[g.kind].dailyCap) return null
 
-    let sc = 0
+    const learn = learningScore(g, day, start, end, f)
+    let sc = learn.sc
     const reasons: string[] = []
 
     const inPractice = practice.find((w) => w.slot.day === day && w.slot.start <= start && end <= w.slot.end)
@@ -289,7 +353,7 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
     if (end > 22 * 60) sc -= 2
     if (start < 9 * 60) sc -= 1
 
-    return { day, start, score: sc, reasons }
+    return { day, start, score: sc, reasons: [...reasons, ...learn.reasons] }
   }
 
   const place = (g: Goal, target: Minutes, minScore: number): boolean => {
@@ -298,7 +362,7 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
     for (const day of DAYS_OF_WEEK) {
       for (const f of free[day]) {
         for (let t = Math.ceil(f.start / STEP) * STEP; t + len <= f.end; t += STEP) {
-          const c = score(g, day, t, len)
+          const c = score(g, day, t, len, f)
           if (!c) continue
           if (!best || c.score > best.score) best = c
         }
@@ -320,6 +384,64 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
       end: best.start + len + s.breakMinutes,
     })
     return true
+  }
+
+  // חזרות מרווחות: ביום שלהן, או בימים שאחריו אם אין מקום. חזרה שעבר זמנה נדחית ולא נעלמת
+  const weekDates = DAYS_OF_WEEK.map((d) => dateOfDay(weekStart, d))
+  const pending = (data.reviews ?? [])
+    // אחרי שחוזרים, החזרה כבר מתקדמת לתאריך הבא, כך שכל מה שנשאר כאן עוד לא בוצע
+    .filter((r) => goals.some((g) => g.id === r.goalId))
+    .map((r) => {
+      let due = r.due
+      if (today && due < today) due = today
+      return { r, due }
+    })
+    .filter(({ due }) => due >= weekDates[0] && due <= weekDates[6])
+    .sort((a, b) => a.due.localeCompare(b.due) || a.r.step - b.r.step)
+  for (const { r, due } of pending) {
+    const g = goals.find((x) => x.id === r.goalId)!
+    const first = weekDates.indexOf(due)
+    let best: (Candidate & { late: number }) | null = null
+    for (const day of DAYS_OF_WEEK.slice(first)) {
+      if (dayLoad(day) + REVIEW_MINUTES > s.maxHoursPerDay * 60) continue
+      if (g.days?.length && !g.days.includes(day)) continue
+      for (const f of free[day]) {
+        for (let t = Math.ceil(f.start / STEP) * STEP; t + REVIEW_MINUTES <= f.end; t += STEP) {
+          const end = t + REVIEW_MINUTES
+          if (g.earliest !== undefined && t < g.earliest) continue
+          if (g.latest !== undefined && end > g.latest) continue
+          // אותו יום עדיף מאוד; תרגול קל עדיף מחוץ לשעות החדות; לא מאוחר בלילה
+          let sc = -(day - first) * 3
+          if (sharp && !inSharp(t, end)) sc += 1
+          if (end > 22 * 60) sc -= 2
+          if (start9(t)) sc -= 1
+          if (!best || sc > best.score) best = { day, start: t, score: sc, reasons: [], late: day - first }
+        }
+      }
+    }
+    if (!best) continue
+    const reasons = [
+      `חזרה ${r.step + 1} על "${r.topic}", ${intervalText(INTERVALS[r.step])} (חזרה מרווחת)`,
+      'שליפה מהזיכרון אחרי הפסקה מחזקת את הזיכרון יותר מעוד קריאה',
+    ]
+    if (r.due < due || best.late > 0) {
+      const [, m, d] = r.due.split('-')
+      reasons.push(`נדחתה מ-${Number(d)}.${Number(m)}, ולא נעלמה`)
+    }
+    sessions.push({
+      id: `review-${r.id}`,
+      goalId: g.id,
+      reviewId: r.id,
+      title: `חזרה: ${r.topic}`,
+      day: best.day,
+      start: best.start,
+      end: best.start + REVIEW_MINUTES,
+      reasons,
+    })
+    free[best.day] = subtract(free[best.day], {
+      start: best.start - s.breakMinutes,
+      end: best.start + REVIEW_MINUTES + s.breakMinutes,
+    })
   }
 
   // שלב 1: מינימום. סבב בין היעדים, כדי שאף יעד לא יתפוס את כל המקומות הטובים
@@ -348,6 +470,8 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
       min: minOf(g) * 60,
       max: maxOf(g) * 60,
       boost: boosts.get(g.id)?.note,
+      reviews: sessions.filter((x) => x.goalId === g.id && x.reviewId).length,
+      reviewsDone: sessions.filter((x) => x.goalId === g.id && x.reviewId && x.done).length,
     })),
   }
 }

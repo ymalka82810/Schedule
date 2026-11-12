@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import type { DayIndex, Minutes } from '../types'
 import type { Block } from '../lib/layout'
 import { DAYS, DAY_NAMES, addDays, formatTime, isSameDay, minutesOfDay } from '../lib/time'
@@ -10,9 +10,11 @@ interface Props {
   now: Date
   selectedDay: DayIndex
   onSelectDay: (day: DayIndex) => void
+  /** לחיצה על בלוק. בלי זה הבלוקים לתצוגה בלבד */
+  onBlockClick?: (blockId: string) => void
 }
 
-export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectDay }: Props) {
+export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectDay, onBlockClick }: Props) {
   const hours: number[] = []
   for (let m = range.start; m < range.end; m += 60) hours.push(m)
 
@@ -70,6 +72,20 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
 
               {dayBlocks.map((b) => {
                 const duration = b.end - b.start
+                const click = onBlockClick
+                  ? {
+                      role: 'button',
+                      tabIndex: 0,
+                      'aria-label': `עריכת ${b.name}`,
+                      onClick: () => onBlockClick(b.id),
+                      onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          onBlockClick(b.id)
+                        }
+                      },
+                    }
+                  : {}
                 const style = {
                   '--top': toHours(b.start),
                   '--span': duration / 60,
@@ -79,8 +95,9 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''}`}
                     style={style}
+                    {...click}
                   >
                     {b.isOption && <span className="block-tag">לבחירה</span>}
                     {b.isOpen && <span className="block-tag">לבחירתך</span>}

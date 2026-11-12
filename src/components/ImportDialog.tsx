@@ -48,12 +48,41 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   const [selection, setSelection] = useState<Selection>({ subjects: {}, variants: {} })
   /** האם היו תיקונים ידניים בטיוטה מאז האשף. חזרה לאשף מבטלת אותם */
   const [edited, setEdited] = useState(false)
+  /** תמונות העמודים המקוריים */
+  const [pages, setPages] = useState<string[]>([])
+  /** כרטיס העריכה שמודגש אחרי לחיצה על בלוק בלוח */
+  const [focusedId, setFocusedId] = useState<string | null>(null)
   const [selectedDay, setSelectedDay] = useState<DayIndex>(0)
   const [onlyCheck, setOnlyCheck] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const nextId = useRef(0)
   const [now] = useState(() => new Date())
   const weekStart = useMemo(() => startOfWeek(now), [now])
+
+  // שחרור התמונות כשמחליפים קובץ או סוגרים
+  useEffect(() => () => pages.forEach((u) => URL.revokeObjectURL(u)), [pages])
+
+  // אחרי לחיצה על בלוק: גלילה לכרטיס, מיקוד בשדה הראשון, והדגשה קצרה
+  useEffect(() => {
+    if (!focusedId) return
+    const el = document.getElementById(`edit-${focusedId}`)
+    if (!el) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
+    el.querySelector<HTMLElement>('input, select')?.focus({ preventScroll: true })
+    const t = window.setTimeout(() => setFocusedId(null), 2000)
+    return () => window.clearTimeout(t)
+  }, [focusedId])
+
+  /** מזהה בלוק בלוח הטיוטה = מזהה השיבוץ, ובמשבצת בחירה "שיבוץ:שיעור" */
+  const openEditor = (blockId: string) => {
+    const id = blockId.split(':')[0]
+    const item = draft.items.find((i) => i.id === id)
+    if (!item) return
+    if (onlyCheck && !item.check) setOnlyCheck(false)
+    setSelectedDay(item.day)
+    setFocusedId(id)
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -91,7 +120,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     if (!file) return
     setStep({ name: 'reading', file: file.name })
     try {
-      const result = await readSchedulePdf(file)
+      const { draft: result, pages: images } = await readSchedulePdf(file)
+      setPages(images)
       if (!result.items.length) {
         setStep({
           name: 'error',
@@ -248,7 +278,11 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                 now={now}
                 selectedDay={selectedDay}
                 onSelectDay={setSelectedDay}
+                onBlockClick={openEditor}
               />
+              <p className="muted">לחיצה על שיעור בלוח פותחת את הכרטיס שלו לעריכה.</p>
+
+              {pages.length > 0 && <OriginalPages pages={pages} />}
 
               <section className="import-edit" aria-label="עריכת הטיוטה">
                 <div className="import-edit-head">
@@ -273,6 +307,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                         <ItemEditor
                           key={item.id}
                           item={item}
+                          highlighted={focusedId === item.id}
                           onChange={(p) => updateItem(item.id, p)}
                           onOption={(k, p) => updateOption(item.id, k, p)}
                           onRemoveOption={(k) => removeOption(item.id, k)}
@@ -343,8 +378,29 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   )
 }
 
+/** העמודים המקוריים מה-PDF, להשוואה תא מול תא. אפשר להגדיל ולגלול */
+function OriginalPages({ pages }: { pages: string[] }) {
+  const [zoom, setZoom] = useState(false)
+  return (
+    <details className="original">
+      <summary>הקובץ המקורי, להשוואה</summary>
+      <div className="original-tools">
+        <button type="button" className="link-btn" onClick={() => setZoom((z) => !z)}>
+          {zoom ? 'התאמה לרוחב' : 'הגדלה'}
+        </button>
+      </div>
+      <div className={`original-pages${zoom ? ' is-zoomed' : ''}`}>
+        {pages.map((src, i) => (
+          <img key={src} src={src} alt={`עמוד ${i + 1} בקובץ המקורי`} />
+        ))}
+      </div>
+    </details>
+  )
+}
+
 interface ItemEditorProps {
   item: DraftItem
+  highlighted: boolean
   onChange: (patch: Partial<DraftItem>) => void
   onOption: (index: number, patch: Partial<DraftOption>) => void
   onRemoveOption: (index: number) => void
@@ -352,10 +408,13 @@ interface ItemEditorProps {
   onRemove: () => void
 }
 
-function ItemEditor({ item, onChange, onOption, onRemoveOption, onAddOption, onRemove }: ItemEditorProps) {
+function ItemEditor({ item, highlighted, onChange, onOption, onRemoveOption, onAddOption, onRemove }: ItemEditorProps) {
   const invalid = item.end <= item.start
   return (
-    <article className={`edit-item${item.check ? ' needs-check' : ''}`}>
+    <article
+      id={`edit-${item.id}`}
+      className={`edit-item${item.check ? ' needs-check' : ''}${highlighted ? ' is-highlighted' : ''}`}
+    >
       <div className="edit-row">
         <label className="field">
           <span>יום</span>

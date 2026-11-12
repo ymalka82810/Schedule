@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { ColorKey, DayIndex, ScheduleData, Slot } from '../types'
 import {
   COLORS,
+  COLOR_NAMES,
   addLesson,
   chooseOption,
   moveChoice,
@@ -10,34 +11,28 @@ import {
   removeEntry,
   removePractice,
   slotProblem,
+  toggleCancellation,
   updateLesson,
   updatePractice,
   type BlockTarget,
 } from '../lib/edit'
 import { DAYS, DAY_NAMES, fromTimeInput, toTimeInput } from '../lib/time'
 
-export type LessonDialogMode = { kind: 'edit'; target: BlockTarget } | { kind: 'new'; day: DayIndex }
+export type LessonTarget = Extract<BlockTarget, { kind: 'entry' | 'choice' | 'practice' }>
+export type LessonDialogMode = { kind: 'edit'; target: LessonTarget } | { kind: 'new'; day: DayIndex }
 
 interface Props {
   data: ScheduleData
   mode: LessonDialogMode
+  /** התאריך של השיבוץ בשבוע המוצג, לביטול בשבוע הזה בלבד */
+  date?: string
   onSave: (data: ScheduleData) => void
   onClose: () => void
 }
 
-const COLOR_NAMES: Record<ColorKey, string> = {
-  cobalt: 'כחול',
-  teal: 'טורקיז',
-  moss: 'ירוק',
-  amber: 'ענבר',
-  coral: 'כתום',
-  plum: 'סגול',
-  slate: 'אפור',
-  rose: 'ורוד',
-}
 
 /** עריכה של שיעור מהלוח, או הוספת שיעור חדש */
-export function LessonDialog({ data, mode, onSave, onClose }: Props) {
+export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
   const target = mode.kind === 'edit' ? mode.target : null
 
   const initialSlot: Slot =
@@ -116,6 +111,12 @@ export function LessonDialog({ data, mode, onSave, onClose }: Props) {
     else onSave(removePractice(data, target.window.id))
   }
 
+  const refId = target?.kind === 'entry' ? target.entry.id : target?.kind === 'choice' ? target.group.id : target?.window.id
+  const cancelledNow = !!(refId && date && (data.cancellations ?? []).some((c) => c.refId === refId && c.date === date))
+  const toggleWeek = () => {
+    if (refId && date) onSave(toggleCancellation(data, refId, date))
+  }
+
   const usesOfLesson = lesson ? data.entries.filter((e) => e.lessonId === lesson.id).length : 0
 
   return (
@@ -129,6 +130,8 @@ export function LessonDialog({ data, mode, onSave, onClose }: Props) {
         </header>
 
         <form className="dialog-body lesson-form" onSubmit={submit}>
+          {cancelledNow && <p className="import-note">השיבוץ הזה בוטל בשבוע המוצג.</p>}
+
           {target?.kind === 'choice' ? (
             <fieldset className="whoami-set">
               <legend>מה אני לומד בשעה הזו?</legend>
@@ -242,9 +245,14 @@ export function LessonDialog({ data, mode, onSave, onClose }: Props) {
             <button type="button" className="btn" onClick={onClose}>
               ביטול
             </button>
+            {target && date && (
+              <button type="button" className="btn" onClick={toggleWeek}>
+                {cancelledNow ? 'החזרה בשבוע הזה' : 'ביטול בשבוע הזה בלבד'}
+              </button>
+            )}
             {target && (
               <button type="button" className="btn btn-danger" onClick={remove}>
-                מחיקה
+                מחיקה מהמערכת
               </button>
             )}
           </div>

@@ -83,3 +83,24 @@ describe('גיבוי', () => {
     expect(fromBackup(JSON.stringify(broken))).toHaveProperty('error')
   })
 })
+
+describe('שבוע מסוים', () => {
+  const WEEK = new Date(2026, 10, 15)
+  it('ביטול בשבוע אחד מסמן את הבלוק רק בשבוע הזה, ולחיצה שנייה מחזירה', async () => {
+    const { toggleCancellation } = await import('../edit')
+    const once = toggleCancellation(initialData, 'e1', '2026-11-16')
+    const cancelled = (data: ScheduleData, week: Date) => buildBlocks(data, { weekStart: week }).find((b) => b.id === 'e1')!.isCancelled
+    expect(cancelled(once, WEEK)).toBe(true)
+    expect(cancelled(once, new Date(2026, 10, 22))).toBeUndefined()
+    expect(toggleCancellation(once, 'e1', '2026-11-16').cancellations).toEqual([])
+  })
+
+  it('אירוע מוצג רק בשבוע שלו, לצד שיעור באותה שעה', async () => {
+    const { saveEvent } = await import('../edit')
+    const data = saveEvent(initialData, { title: 'בר מצווה', date: '2026-11-15', start: 14 * 60, end: 16 * 60 })
+    const blocks = buildBlocks(data, { weekStart: WEEK })
+    const ev = blocks.find((b) => b.type === 'event')!
+    expect(ev).toMatchObject({ day: 0, name: 'בר מצווה', lanes: 2 })
+    expect(buildBlocks(data, { weekStart: new Date(2026, 10, 22) }).some((b) => b.type === 'event')).toBe(false)
+  })
+})

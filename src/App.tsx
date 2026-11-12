@@ -3,12 +3,22 @@ import type { DayIndex, ScheduleData } from './types'
 import type { Account } from './auth/account'
 import { ImportDialog } from './components/ImportDialog'
 import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
+import { EventDialog, SessionDialog } from './components/EventDialogs'
+import { GoalsDialog } from './components/GoalsDialog'
+import { planWeek, type PlannedSession } from './lib/plan'
+import type { Goal, OneOffEvent } from './types'
 import { LoginDialog } from './components/LoginDialog'
 import { resolveBlock } from './lib/edit'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
 import { loadTheme, saveTheme, type Theme } from './lib/storage'
-import { addDays, formatWeekRange, isSameDay, startOfWeek } from './lib/time'
+import { addDays, dateOfDay, formatWeekRange, isSameDay, isoDate, startOfWeek } from './lib/time'
+
+type Dialog =
+  | { kind: 'lesson'; mode: LessonDialogMode; date?: string }
+  | { kind: 'event'; event: OneOffEvent | { date: string } }
+  | { kind: 'session'; session: PlannedSession; goal: Goal }
+  | { kind: 'goals' }
 
 interface Props {
   initialData: ScheduleData
@@ -24,7 +34,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   const [backup, setBackup] = useState(initialBackup)
   const [importing, setImporting] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
-  const [editing, setEditing] = useState<LessonDialogMode | null>(null)
+  const [dialog, setDialog] = useState<Dialog | null>(null)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
@@ -41,7 +51,9 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
     return () => window.clearInterval(id)
   }, [])
 
-  const blocks = useMemo(() => buildBlocks(data), [data])
+  // התכנון של הזמן הפנוי מחושב מחדש לכל שבוע: אירועים וביטולים משנים אותו
+  const plan = useMemo(() => planWeek(data, weekStart), [data, weekStart])
+  const blocks = useMemo(() => buildBlocks(data, { weekStart, plan: plan.sessions }), [data, weekStart, plan])
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
   const isEmpty = blocks.length === 0
 
@@ -66,12 +78,24 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   /** עריכה מהלוח לא נוגעת בגיבוי שלפני הייבוא */
   const handleEdit = (next: ScheduleData) => {
     commit(next, backup)
-    setEditing(null)
+    setDialog(null)
   }
 
   const openBlock = (blockId: string) => {
-    const target = resolveBlock(data, blockId)
-    if (target) setEditing({ kind: 'edit', target })
+    const target = resolveBlock(data, blockId, plan.sessions)
+    if (!target) return
+    if (target.kind === 'event') setDialog({ kind: 'event', event: target.event })
+    else if (target.kind === 'plan') setDialog({ kind: 'session', session: target.session, goal: target.goal })
+    else {
+      const day = target.kind === 'entry' ? target.entry.slot.day : target.kind === 'choice' ? target.group.slot.day : target.window.slot.day
+      setDialog({ kind: 'lesson', mode: { kind: 'edit', target }, date: dateOfDay(weekStart, day) })
+    }
+  }
+
+  const newEventDate = () => {
+    const today = isoDate(now)
+    const day = dateOfDay(weekStart, selectedDay)
+    return isThisWeek && day < today ? today : day
   }
 
   const handleRestore = () => {
@@ -114,8 +138,20 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
             </button>
           </div>
 
-          <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: 'new', day: selectedDay })}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: selectedDay } })}
+          >
             ＋ שיעור
+          </button>
+
+          <button type="button" className="btn" onClick={() => setDialog({ kind: 'event', event: { date: newEventDate() } })}>
+            ＋ אירוע
+          </button>
+
+          <button type="button" className="btn" onClick={() => setDialog({ kind: 'goals' })}>
+            יעדים
           </button>
 
           <button type="button" className="btn" onClick={() => setImporting(true)}>
@@ -160,7 +196,11 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
             <button type="button" className="btn btn-primary" onClick={() => setImporting(true)}>
               ייבוא מקובץ PDF
             </button>
-            <button type="button" className="btn" onClick={() => setEditing({ kind: 'new', day: selectedDay })}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: selectedDay } })}
+            >
               הוספת שיעור
             </button>
           </div>
@@ -177,8 +217,28 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         onBlockClick={openBlock}
       />
 
-      {editing && (
-        <LessonDialog data={data} mode={editing} onSave={handleEdit} onClose={() => setEditing(null)} />
+      {dialog?.kind === 'lesson' && (
+        <LessonDialog
+          data={data}
+          mode={dialog.mode}
+          date={dialog.date}
+          onSave={handleEdit}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'event' && (
+        <EventDialog data={data} event={dialog.event} onSave={handleEdit} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'session' && (
+        <SessionDialog
+          session={dialog.session}
+          goal={dialog.goal}
+          onEditGoals={() => setDialog({ kind: 'goals' })}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'goals' && (
+        <GoalsDialog data={data} weekStart={weekStart} onSave={handleEdit} onClose={() => setDialog(null)} />
       )}
 
       {loggingIn && account.kind === 'guest' && (

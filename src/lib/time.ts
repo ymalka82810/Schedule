@@ -32,6 +32,14 @@ export function isSameDay(a: Date, b: Date): boolean {
   )
 }
 
+/** YYYY-MM-DD לפי השעון המקומי */
+export function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** תאריך של יום בשבוע: weekStart הוא יום ראשון */
+export const dateOfDay = (weekStart: Date, day: number) => isoDate(addDays(weekStart, day))
+
 export const minutesOfDay = (d: Date): Minutes => d.getHours() * 60 + d.getMinutes()
 
 const rangeFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'long' })

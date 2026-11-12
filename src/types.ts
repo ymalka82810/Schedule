@@ -67,7 +67,7 @@ export interface PracticeWindow {
   context?: string
 }
 
-/** יעד גמיש לזמן הפנוי (שלב 4) */
+/** יעד גמיש לזמן הפנוי (שלב 4): המערכת משבצת אותו לבד בזמן הפנוי של כל שבוע */
 export interface Goal {
   id: string
   name: string
@@ -75,6 +75,38 @@ export interface Goal {
   minHoursPerWeek: number
   maxHoursPerWeek: number
   preferredWindows: Slot[]
+  /** המקצוע שהיעד קשור אליו (שם השיעור). מאפשר לשבץ תרגול אחרי השיעור או לפני השיעור הבא */
+  subject?: string
+  /** אורך מפגש בדקות. ברירת מחדל 60 */
+  sessionMinutes?: number
+  /** לשבץ קודם בחלונות התרגול (כמו מיגו) */
+  preferPractice?: boolean
+  /** כמה מפגשים לכל היותר ביום. ברירת מחדל 1 */
+  maxPerDay?: number
+}
+
+/** ביטול של שיבוץ קבוע בשבוע אחד (מרצה חולה, חופשה) */
+export interface Cancellation {
+  id: string
+  /** YYYY-MM-DD */
+  date: string
+  /** מזהה השיבוץ, משבצת הבחירה או חלון התרגול */
+  refId: string
+}
+
+/** איך מתכננים את הזמן הפנוי */
+export interface PlanSettings {
+  /** מתי מתחיל ונגמר היום הפעיל (קימה ושינה) */
+  dayStart: Minutes
+  dayEnd: Minutes
+  /** הפסקה מינימלית לפני ואחרי כל שיעור או מפגש */
+  breakMinutes: Minutes
+  /** בשישי מסיימים מוקדם. null = יום רגיל */
+  fridayEnd: Minutes | null
+  /** ימים בלי תכנון בכלל */
+  offDays: DayIndex[]
+  /** כמה שעות תרגול לכל היותר ביום */
+  maxHoursPerDay: number
 }
 
 /** אירוע חד-פעמי, שייך לתאריך מסוים ולא למערכת הקבועה (שלב 3) */
@@ -106,7 +138,11 @@ export interface ScheduleData {
   practiceWindows: PracticeWindow[]
   goals: Goal[]
   events: OneOffEvent[]
+  /** ביטולים של שיבוצים בשבוע מסוים */
+  cancellations?: Cancellation[]
   settings: Settings
+  /** הגדרות תכנון הזמן הפנוי. חסר = ברירת המחדל */
+  plan?: PlanSettings
   /** מאיזה קובץ נבנתה המערכת. חסר אם לא יובאה מקובץ */
   source?: {
     fileName: string

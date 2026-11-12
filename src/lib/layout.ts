@@ -1,4 +1,6 @@
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
+import { isCancelled, type PlannedSession } from './plan'
+import { dateOfDay } from './time'
 
 /** בלוק אחד מוכן לציור בלוח */
 export interface Block {
@@ -18,12 +20,25 @@ export interface Block {
   isOption: boolean
   /** חלון תרגול חופשי שהתוכן שלו עוד לא נקבע */
   isOpen: boolean
+  type: 'lesson' | 'choice' | 'practice' | 'event' | 'plan'
+  /** בוטל בשבוע המוצג. מוצג חיוור, כדי שאפשר יהיה להחזיר */
+  isCancelled?: boolean
+}
+
+interface WeekOptions {
+  /** השבוע המוצג: מוסיף אירועים, מסמן ביטולים */
+  weekStart?: Date
+  /** המפגשים שתוכננו לשבוע, ושמות היעדים וצבעיהם */
+  plan?: PlannedSession[]
 }
 
 /** הופך את הנתונים השמורים לרשימת בלוקים לציור */
-export function buildBlocks(data: ScheduleData): Block[] {
+export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[] {
   const lessons = new Map(data.lessons.map((l) => [l.id, l]))
   const blocks: Block[] = []
+  const { weekStart } = opts
+  const cancelled = (refId: string, day: DayIndex) =>
+    weekStart ? isCancelled(data, refId, dateOfDay(weekStart, day)) : false
 
   for (const e of data.entries) {
     const l = lessons.get(e.lessonId)
@@ -40,6 +55,8 @@ export function buildBlocks(data: ScheduleData): Block[] {
       lanes: 1,
       isOption: false,
       isOpen: false,
+      type: 'lesson',
+      isCancelled: cancelled(e.id, e.slot.day) || undefined,
     })
   }
 
@@ -60,6 +77,8 @@ export function buildBlocks(data: ScheduleData): Block[] {
         lanes: ids.length,
         isOption: !g.chosenLessonId,
         isOpen: false,
+        type: 'choice',
+        isCancelled: cancelled(g.id, g.slot.day) || undefined,
       })
     })
   }
@@ -76,9 +95,85 @@ export function buildBlocks(data: ScheduleData): Block[] {
       lanes: 1,
       isOption: false,
       isOpen: true,
+      type: 'practice',
+      isCancelled: cancelled(w.id, w.slot.day) || undefined,
     })
   }
 
+  if (weekStart) {
+    for (const ev of data.events) {
+      const day = ([0, 1, 2, 3, 4, 5, 6] as DayIndex[]).find((d) => dateOfDay(weekStart, d) === ev.date)
+      if (day === undefined) continue
+      blocks.push({
+        id: ev.id,
+        day,
+        start: ev.start,
+        end: ev.end,
+        name: ev.title,
+        color: 'rose',
+        lane: 0,
+        lanes: 1,
+        isOption: false,
+        isOpen: false,
+        type: 'event',
+      })
+    }
+  }
+
+  const goals = new Map(data.goals.map((g) => [g.id, g]))
+  for (const p of opts.plan ?? []) {
+    const g = goals.get(p.goalId)
+    if (!g) continue
+    blocks.push({
+      id: p.id,
+      day: p.day,
+      start: p.start,
+      end: p.end,
+      name: g.name,
+      color: g.color,
+      lane: 0,
+      lanes: 1,
+      isOption: false,
+      isOpen: false,
+      type: 'plan',
+    })
+  }
+
+  // שיעור קבוע ואירוע באותה שעה: מציגים זה לצד זה
+  return sideBySide(blocks)
+}
+
+/** בלוקים חופפים באותו יום (שאינם כבר במשבצת בחירה) מקבלים מסלולים נפרדים */
+function sideBySide(blocks: Block[]): Block[] {
+  const byDay = new Map<DayIndex, Block[]>()
+  for (const b of blocks) byDay.set(b.day, [...(byDay.get(b.day) ?? []), b])
+  for (const list of byDay.values()) {
+    const singles = list.filter((b) => b.lanes === 1).sort((a, b) => a.start - b.start)
+    let cluster: Block[] = []
+    let end = -1
+    const flush = () => {
+      if (cluster.length > 1) {
+        // כל בלוק למסלול הראשון שהתפנה, כדי לא לפצל יותר ממה שצריך
+        const laneEnds: number[] = []
+        for (const b of cluster) {
+          let lane = laneEnds.findIndex((e) => e <= b.start)
+          if (lane < 0) lane = laneEnds.push(0) - 1
+          laneEnds[lane] = b.end
+          b.lane = lane
+        }
+        for (const b of cluster) b.lanes = laneEnds.length
+      }
+      cluster = []
+    }
+    for (const b of singles) {
+      if (b.start >= end) {
+        flush()
+        end = b.end
+      } else end = Math.max(end, b.end)
+      cluster.push(b)
+    }
+    flush()
+  }
   return blocks
 }
 

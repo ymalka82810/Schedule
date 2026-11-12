@@ -95,12 +95,15 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}`}
                     style={style}
                     {...click}
                   >
                     {b.isOption && <span className="block-tag">לבחירה</span>}
                     {b.isOpen && <span className="block-tag">לבחירתך</span>}
+                    {b.isCancelled && <span className="block-tag">בוטל השבוע</span>}
+                    {b.type === 'event' && <span className="block-tag">אירוע</span>}
+                    {b.type === 'plan' && <span className="block-tag">מתוכנן</span>}
                     <h3 className="block-name">{b.name}</h3>
                     <p className="block-time">
                       <bdi dir="ltr">

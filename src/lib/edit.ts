@@ -1,4 +1,16 @@
-import type { ChoiceGroup, ColorKey, FixedEntry, Lesson, PracticeWindow, ScheduleData, Slot } from '../types'
+import type {
+  ChoiceGroup,
+  ColorKey,
+  FixedEntry,
+  Goal,
+  Lesson,
+  OneOffEvent,
+  PlanSettings,
+  PracticeWindow,
+  ScheduleData,
+  Slot,
+} from '../types'
+import type { PlannedSession } from './plan'
 
 /**
  * עריכה ישירה של המערכת השמורה (שלב 2). כל פעולה מקבלת נתונים ומחזירה נתונים חדשים, בלי לשנות את המקור.
@@ -6,15 +18,35 @@ import type { ChoiceGroup, ColorKey, FixedEntry, Lesson, PracticeWindow, Schedul
 
 export const COLORS: ColorKey[] = ['cobalt', 'teal', 'moss', 'amber', 'coral', 'plum', 'slate', 'rose']
 
+export const COLOR_NAMES: Record<ColorKey, string> = {
+  cobalt: 'כחול',
+  teal: 'טורקיז',
+  moss: 'ירוק',
+  amber: 'ענבר',
+  coral: 'כתום',
+  plum: 'סגול',
+  slate: 'אפור',
+  rose: 'ורוד',
+}
+
 /** מה נמצא מאחורי בלוק בלוח */
 export type BlockTarget =
   | { kind: 'entry'; entry: FixedEntry; lesson: Lesson }
   | { kind: 'choice'; group: ChoiceGroup; options: Lesson[] }
   | { kind: 'practice'; window: PracticeWindow }
+  | { kind: 'event'; event: OneOffEvent }
+  | { kind: 'plan'; session: PlannedSession; goal: Goal }
 
 /** מזהה בלוק: שיבוץ, חלון תרגול, או "משבצת:שיעור" במשבצת בחירה (ראו layout.ts) */
-export function resolveBlock(data: ScheduleData, blockId: string): BlockTarget | null {
+export function resolveBlock(data: ScheduleData, blockId: string, plan: PlannedSession[] = []): BlockTarget | null {
   const lessons = new Map(data.lessons.map((l) => [l.id, l]))
+  const event = data.events.find((e) => e.id === blockId)
+  if (event) return { kind: 'event', event }
+  const session = plan.find((p) => p.id === blockId)
+  if (session) {
+    const goal = data.goals.find((g) => g.id === session.goalId)
+    return goal ? { kind: 'plan', session, goal } : null
+  }
   const entry = data.entries.find((e) => e.id === blockId)
   if (entry) {
     const lesson = lessons.get(entry.lessonId)
@@ -122,6 +154,50 @@ export function addLesson(data: ScheduleData, input: NewLesson): ScheduleData {
   return { ...data, lessons, entries: [...data.entries, entry] }
 }
 
+// ---------- שבוע מסוים: ביטולים ואירועים ----------
+
+/** מבטל שיבוץ קבוע בתאריך אחד, או מחזיר אותו אם כבר בוטל */
+export function toggleCancellation(data: ScheduleData, refId: string, date: string): ScheduleData {
+  const list = data.cancellations ?? []
+  const exists = list.some((c) => c.refId === refId && c.date === date)
+  return {
+    ...data,
+    cancellations: exists
+      ? list.filter((c) => !(c.refId === refId && c.date === date))
+      : [...list, { id: newId('x', list.map((c) => c.id)), refId, date }],
+  }
+}
+
+export function saveEvent(data: ScheduleData, ev: Omit<OneOffEvent, 'id'> & { id?: string }): ScheduleData {
+  if (ev.id && data.events.some((e) => e.id === ev.id)) {
+    return { ...data, events: data.events.map((e) => (e.id === ev.id ? { ...e, ...ev, id: e.id } : e)) }
+  }
+  const id = newId('ev', data.events.map((e) => e.id))
+  return { ...data, events: [...data.events, { ...ev, id, title: ev.title.trim() }] }
+}
+
+export function removeEvent(data: ScheduleData, id: string): ScheduleData {
+  return { ...data, events: data.events.filter((e) => e.id !== id) }
+}
+
+// ---------- יעדים ----------
+
+export function saveGoal(data: ScheduleData, goal: Omit<Goal, 'id'> & { id?: string }): ScheduleData {
+  if (goal.id && data.goals.some((g) => g.id === goal.id)) {
+    return { ...data, goals: data.goals.map((g) => (g.id === goal.id ? { ...g, ...goal, id: g.id } : g)) }
+  }
+  const id = newId('goal', data.goals.map((g) => g.id))
+  return { ...data, goals: [...data.goals, { ...goal, id }] }
+}
+
+export function removeGoal(data: ScheduleData, id: string): ScheduleData {
+  return { ...data, goals: data.goals.filter((g) => g.id !== id) }
+}
+
+export function savePlanSettings(data: ScheduleData, plan: PlanSettings): ScheduleData {
+  return { ...data, plan }
+}
+
 /** בדיקה לפני שמירה של שיבוץ. מחזיר הודעה, או null אם תקין */
 export function slotProblem(slot: Slot): string | null {
   if (slot.end <= slot.start) return 'שעת הסיום חייבת להיות אחרי שעת ההתחלה.'
@@ -159,6 +235,8 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     practiceWindows: Array.isArray(data.practiceWindows) ? (data.practiceWindows as PracticeWindow[]) : [],
     goals: Array.isArray(data.goals) ? (data.goals as ScheduleData['goals']) : [],
     events: Array.isArray(data.events) ? (data.events as ScheduleData['events']) : [],
+    ...(Array.isArray(data.cancellations) ? { cancellations: data.cancellations as ScheduleData['cancellations'] } : {}),
+    ...(isObj(data.plan) ? { plan: data.plan as unknown as ScheduleData['plan'] } : {}),
     settings: data.settings as unknown as ScheduleData['settings'],
   }
   if (isObj(data.source)) full.source = data.source as unknown as ScheduleData['source']

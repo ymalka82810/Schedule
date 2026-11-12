@@ -1049,3 +1049,87 @@ p {
   font-size: 0.875rem;
   color: var(--accent);
 }
+
+/* ---------- אירועים, ביטולים ותכנון ---------- */
+.block.t-event {
+  border-inline-start-width: 6px;
+  background: color-mix(in oklab, var(--hue) calc(var(--fill-mix) * 1.6), var(--surface));
+}
+
+/* מפגש מתוכנן: מסגרת מקווקווה, כי הוא הצעה שמתעדכנת כל שבוע */
+.block.t-plan {
+  border: 1.5px dashed var(--hue);
+  border-inline-start: 4px solid var(--hue);
+  background: color-mix(in oklab, var(--hue) calc(var(--fill-mix) * 0.6), var(--surface));
+}
+
+.block.is-cancelled {
+  opacity: 0.45;
+}
+
+.block.is-cancelled .block-name {
+  text-decoration: line-through;
+}
+
+.goals {
+  max-width: 46rem;
+}
+
+.goal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--hue);
+  border-radius: 0.75rem;
+  padding: 0.25rem 0.75rem 0.5rem;
+}
+
+.goal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.goal-name {
+  font-weight: 700;
+}
+
+.goal-status {
+  font-size: 0.875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-status.is-short {
+  color: #b3261e;
+}
+
+:root[data-theme='dark'] .goal-status.is-short {
+  color: #ff8a80;
+}
+
+.goal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.goal-body .edit-row .field,
+.whoami-set .edit-row .field {
+  flex: 1 1 8rem;
+}
+
+.goal-narrow {
+  max-width: 10rem;
+}

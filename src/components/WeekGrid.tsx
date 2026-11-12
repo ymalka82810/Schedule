@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { DayIndex, Minutes } from '../types'
-import type { Block } from '../lib/layout'
+import { conflictsOf, type Block } from '../lib/layout'
 import { DAYS, DAY_NAMES, addDays, formatTime, isSameDay, isoDate, minutesOfDay } from '../lib/time'
 import { dayInfo } from '../lib/hebrew'
 
@@ -15,8 +15,8 @@ interface Props {
   onBlockClick?: (blockId: string) => void
   /** הערה לכל יום, למשל שם חופשה */
   dayNotes?: Partial<Record<DayIndex, string>>
-  /** שחרור של בלוק שנגרר למקום חדש. בלי זה אין גרירה */
-  onBlockMove?: (blockId: string, day: DayIndex, start: Minutes) => void
+  /** שחרור של בלוק שנגרר או שאורכו שונה. בלי זה אין גרירה */
+  onBlockMove?: (blockId: string, day: DayIndex, start: Minutes, end: Minutes) => void
 }
 
 /** קפיצות של רבע שעה בגרירה */
@@ -28,7 +28,10 @@ interface Drag {
   id: string
   name: string
   color: Block['color']
+  /** move = הזזה, resize = שינוי אורך מהקצה התחתון */
+  mode: 'move' | 'resize'
   len: Minutes
+  origLen: Minutes
   /** כמה דקות מתחילת הבלוק נתפס */
   grab: Minutes
   origDay: DayIndex
@@ -36,11 +39,15 @@ interface Drag {
   day: DayIndex
   start: Minutes
   touch: boolean
+  /** הזזה עם המקלדת: חצים, Enter לאישור */
+  keyboard?: boolean
   x: number
   y: number
   /** הגרירה התחילה (אחרי תזוזה בעכבר או לחיצה ארוכה במגע) */
   active: boolean
 }
+
+const snap = (m: Minutes) => Math.round(m / SNAP) * SNAP
 
 export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectDay, onBlockClick, dayNotes, onBlockMove }: Props) {
   const [ghost, setGhost] = useState<Drag | null>(null)
@@ -58,14 +65,28 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
     moveRef.current = onBlockMove
   })
 
-  useEffect(() => {
-    const end = () => {
-      window.clearTimeout(pressTimer.current)
-      drag.current = null
-      setGhost(null)
-      document.body.classList.remove('is-dragging')
-    }
+  const endDrag = () => {
+    window.clearTimeout(pressTimer.current)
+    drag.current = null
+    setGhost(null)
+    document.body.classList.remove('is-dragging')
+  }
 
+  /** שחרור: אם משהו השתנה, מדווחים למעלה */
+  const drop = (d: Drag) => {
+    if (d.day !== d.origDay || d.start !== d.origStart || d.len !== d.origLen) {
+      moveRef.current?.(d.id, d.day, d.start, d.start + d.len)
+    }
+  }
+
+  /** גבולות: בתוך הטווח המוצג ובתוך היממה, לפחות רבע שעה */
+  const clamp = (d: Drag) => {
+    const r = rangeRef.current
+    d.len = Math.max(SNAP, Math.min(d.len, Math.min(r.end, 24 * 60) - d.start))
+    d.start = Math.max(Math.max(r.start, 0), Math.min(Math.min(r.end, 24 * 60) - d.len, d.start))
+  }
+
+  useEffect(() => {
     /** איפה הבלוק ינחת לפי מיקום האצבע או העכבר */
     const locate = (d: Drag, x: number, y: number) => {
       const r = rangeRef.current
@@ -75,17 +96,24 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
         if (dayAttr === undefined) continue
         const day = Number(dayAttr) as DayIndex
         if (h.classList.contains('day-head')) {
+          if (d.mode === 'resize') return
           // בטלפון מוצג יום אחד: מעבר מעל לשונית של יום אחר עובר אליו
           if (day !== d.day) selectRef.current(day)
-          return { day, start: d.start }
+          d.day = day
+          return
         }
         const rect = h.getBoundingClientRect()
-        const min = r.start + ((y - rect.top) / rect.height) * (r.end - r.start) - d.grab
-        const snapped = Math.round(min / SNAP) * SNAP
-        const start = Math.max(r.start, Math.min(r.end - d.len, snapped))
-        return { day, start: Math.max(0, Math.min(24 * 60 - d.len, start)) }
+        const pointer = r.start + ((y - rect.top) / rect.height) * (r.end - r.start)
+        if (d.mode === 'resize') {
+          // שינוי אורך נשאר באותו יום, גם אם האצבע זזה הצידה
+          d.len = snap(pointer) - d.start
+        } else {
+          d.day = day
+          d.start = snap(pointer - d.grab)
+        }
+        clamp(d)
+        return
       }
-      return { day: d.day, start: d.start }
     }
 
     const begin = (d: Drag) => {
@@ -97,20 +125,18 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
 
     const onMove = (e: PointerEvent) => {
       const d = drag.current
-      if (!d) return
+      if (!d || d.keyboard) return
       const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y)
       if (!d.active) {
         // במגע: תזוזה לפני הלחיצה הארוכה היא גלילה. בעכבר: תזוזה קטנה מתחילה גרירה
         if (d.touch) {
-          if (dist > 10) end()
+          if (dist > 10) endDrag()
           return
         }
         if (dist < 5) return
         begin(d)
       }
-      const at = locate(d, e.clientX, e.clientY)
-      d.day = at.day
-      d.start = at.start
+      locate(d, e.clientX, e.clientY)
       setGhost({ ...d })
       // גלילה אוטומטית ליד קצות המסך
       if (e.clientY < 70) window.scrollBy(0, -14)
@@ -119,59 +145,76 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
 
     const onUp = () => {
       const d = drag.current
-      if (!d) return
+      if (!d || d.keyboard) return
       if (d.active) {
         suppressClick.current = true
         window.setTimeout(() => (suppressClick.current = false), 0)
-        if (d.day !== d.origDay || d.start !== d.origStart) moveRef.current?.(d.id, d.day, d.start)
+        drop(d)
       }
-      end()
+      endDrag()
+    }
+
+    const onCancel = () => {
+      if (!drag.current?.keyboard) endDrag()
     }
 
     // בזמן גרירה במגע: לא לגלול את הדף
     const onTouchMove = (e: TouchEvent) => {
-      if (drag.current?.active) e.preventDefault()
+      if (drag.current?.active && !drag.current.keyboard) e.preventDefault()
     }
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape' && drag.current) end()
+      if (e.key === 'Escape' && drag.current) endDrag()
     }
 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', end)
+    window.addEventListener('pointercancel', onCancel)
     window.addEventListener('touchmove', onTouchMove, { passive: false })
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', end)
+      window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('touchmove', onTouchMove)
       window.removeEventListener('keydown', onKey)
-      end()
+      endDrag()
     }
+    // המאזינים קוראים רק refs, ולכן נרשמים פעם אחת
   }, [])
 
-  const startPress = (e: ReactPointerEvent<HTMLElement>, b: Block) => {
+  const newDrag = (b: Block, mode: Drag['mode'], extra: Partial<Drag> = {}): Drag => ({
+    id: b.id,
+    name: b.name,
+    color: b.color,
+    mode,
+    len: b.end - b.start,
+    origLen: b.end - b.start,
+    grab: 0,
+    origDay: b.day,
+    origStart: b.start,
+    day: b.day,
+    start: b.start,
+    touch: false,
+    x: 0,
+    y: 0,
+    active: false,
+    ...extra,
+  })
+
+  const startPress = (e: ReactPointerEvent<HTMLElement>, b: Block, mode: Drag['mode']) => {
     if (!onBlockMove || !b.draggable || (e.pointerType === 'mouse' && e.button !== 0)) return
+    if (drag.current?.keyboard) return
+    e.stopPropagation()
     const col = e.currentTarget.closest('.day-col') as HTMLElement | null
     if (!col) return
     const rect = col.getBoundingClientRect()
     const pointer = range.start + ((e.clientY - rect.top) / rect.height) * (range.end - range.start)
-    const d: Drag = {
-      id: b.id,
-      name: b.name,
-      color: b.color,
-      len: b.end - b.start,
+    const d = newDrag(b, mode, {
       grab: Math.max(0, pointer - b.start),
-      origDay: b.day,
-      origStart: b.start,
-      day: b.day,
-      start: b.start,
       touch: e.pointerType !== 'mouse',
       x: e.clientX,
       y: e.clientY,
-      active: false,
-    }
+    })
     drag.current = d
     window.clearTimeout(pressTimer.current)
     if (d.touch) {
@@ -186,15 +229,54 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
     }
   }
 
+  /**
+   * הזזה במקלדת: חצים למעלה ולמטה = רבע שעה, ימינה ושמאלה = יום (הלוח מימין לשמאל),
+   * Shift עם חץ למעלה או למטה = אורך. Enter מאשר, Escape מבטל
+   */
+  const keyMove = (e: KeyboardEvent<HTMLElement>, b: Block): boolean => {
+    if (!onBlockMove || !b.draggable) return false
+    const d = drag.current
+    const ours = d?.keyboard && d.id === b.id ? d : null
+    if (ours && e.key === 'Enter') {
+      drop(ours)
+      endDrag()
+      return true
+    }
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return false
+    if (e.altKey || e.ctrlKey || e.metaKey) return false
+    const cur = { ...(ours ?? newDrag(b, 'move', { keyboard: true, active: true })) }
+    const vertical = e.key === 'ArrowUp' ? -SNAP : e.key === 'ArrowDown' ? SNAP : 0
+    if (e.shiftKey && vertical) cur.len += vertical
+    else if (vertical) cur.start += vertical
+    else {
+      const step = e.key === 'ArrowLeft' ? 1 : -1
+      const day = Math.max(0, Math.min(6, cur.day + step)) as DayIndex
+      if (day !== cur.day) {
+        cur.day = day
+        onSelectDay(day)
+      }
+    }
+    clamp(cur)
+    drag.current = cur
+    setGhost({ ...cur })
+    return true
+  }
+
   const hours: number[] = []
   for (let m = range.start; m < range.end; m += 60) hours.push(m)
 
   const nowMin = minutesOfDay(now)
   const showNow = nowMin >= range.start && nowMin <= range.end
   const toHours = (m: Minutes) => (m - range.start) / 60
+  const clashes = ghost?.active ? conflictsOf(blocks, ghost) : []
 
   return (
     <section className="week" aria-label="מערכת שבועית">
+      <p className="visually-hidden" aria-live="polite">
+        {ghost?.keyboard
+          ? `${ghost.name}: יום ${DAY_NAMES[ghost.day]}, ${formatTime(ghost.start)} עד ${formatTime(ghost.start + ghost.len)}${clashes.length ? `, מתנגש עם ${clashes[0].name}` : ''}. Enter לאישור, Escape לביטול`
+          : ''}
+      </p>
       <div className="week-days" role="tablist" aria-label="ימי השבוע">
         <div className="week-corner" aria-hidden="true" />
         {DAYS.map((day) => {
@@ -258,6 +340,10 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                         if (!suppressClick.current) onBlockClick(b.id)
                       },
                       onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+                        if (keyMove(e, b)) {
+                          e.preventDefault()
+                          return
+                        }
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
                           onBlockClick(b.id)
@@ -268,7 +354,10 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 const canDrag = !!onBlockMove && !!b.draggable
                 const dragProps = canDrag
                   ? {
-                      onPointerDown: (e: ReactPointerEvent<HTMLElement>) => startPress(e, b),
+                      onPointerDown: (e: ReactPointerEvent<HTMLElement>) => startPress(e, b, 'move'),
+                      onBlur: () => {
+                        if (drag.current?.keyboard && drag.current.id === b.id) endDrag()
+                      },
                       onContextMenu: (e: { preventDefault: () => void }) => e.preventDefault(),
                     }
                   : {}
@@ -303,16 +392,26 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                     </p>
                     {b.room && <p className="block-meta">{b.room}</p>}
                     {b.teacher && <p className="block-meta">{b.teacher}</p>}
+                    {canDrag && (
+                      <span
+                        className="block-resize"
+                        aria-hidden="true"
+                        title="גרירה לשינוי האורך"
+                        onPointerDown={(e) => startPress(e, b, 'resize')}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
                   </article>
                 )
               })}
 
               {ghost?.active && ghost.day === day && (
                 <div
-                  className={`block drag-ghost c-${ghost.color}${ghost.len < 60 ? ' is-short' : ''}`}
+                  className={`block drag-ghost c-${ghost.color}${ghost.len < 60 ? ' is-short' : ''}${clashes.length ? ' is-conflict' : ''}`}
                   style={{ '--top': toHours(ghost.start), '--span': ghost.len / 60, '--lane': 0, '--lanes': 1 } as CSSProperties}
                   aria-hidden="true"
                 >
+                  {clashes.length > 0 && <span className="block-tag">מתנגש עם {clashes[0].name}</span>}
                   <h3 className="block-name">{ghost.name}</h3>
                   <p className="block-time">
                     <bdi dir="ltr">

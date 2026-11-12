@@ -141,6 +141,8 @@ export interface SessionPin {
   /** איפה התכנון האוטומטי שם אותו לפני ההזזה */
   fromDate: string
   fromStart: Minutes
+  /** סוף המפגש המקורי, אם האורך שונה */
+  fromEnd?: Minutes
   /** הרישום ב-planFeedback שנוצר מההזזה */
   feedbackId: string
 }
@@ -300,5 +302,7 @@ export interface ScheduleData {
     versionDate?: string
     /** ISO */
     importedAt: string
+    /** YYYY-MM-DD: לא להזכיר לבדוק גרסה חדשה לפני התאריך הזה */
+    remindAfter?: string
   }
 }

@@ -3,7 +3,18 @@ import type { OneOffEvent, ScheduleData } from '../types'
 import type { PlannedSession } from '../lib/plan'
 import type { Goal, Rating } from '../types'
 import { removeBreak, removeEvent, saveBreak, saveEvent, slotProblem } from '../lib/edit'
-import { INTERVALS, KINDS, REVIEW_TIP, blocksOf, intervalText, logReview, logSession, nextReview, unlogSession } from '../lib/learning'
+import {
+  INTERVALS,
+  KINDS,
+  REVIEW_TIP,
+  blocksOf,
+  intervalText,
+  lastStuck,
+  logReview,
+  logSession,
+  nextReview,
+  unlogSession,
+} from '../lib/learning'
 import { subjectNames } from '../lib/plan'
 import { DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
 import { useEscape } from './useEscape'
@@ -226,6 +237,7 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
   const len = session.end - session.start
   const blocks = isReview ? null : blocksOf(goal.kind, len)
   const tip = isReview ? REVIEW_TIP : goal.kind ? KINDS[goal.kind].tip : null
+  const prevStuck = !isReview && !session.done ? lastStuck(data, goal.id, date, session.start) : null
 
   const save = () => {
     if (review) onSave(logReview(data, review, session, date, { rating: rating ?? 'ok', stuck }))
@@ -268,6 +280,15 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
               ))}
             </ul>
           </div>
+          {prevStuck && (
+            <div className="session-tip">
+              <p className="muted">
+                בפעם הקודמת ({Number(prevStuck.date.slice(8))}.{Number(prevStuck.date.slice(5, 7))}) נתקעת ב:
+              </p>
+              <p>{prevStuck.stuck}</p>
+              <p className="muted">כדאי להתחיל משם: חולשה אחת מוגדרת היא המטרה הכי טובה למפגש.</p>
+            </div>
+          )}
           {(tip || blocks) && !session.done && (
             <div className="session-tip">
               <p className="muted">איך לעבוד:</p>

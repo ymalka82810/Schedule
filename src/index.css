@@ -1099,13 +1099,105 @@ body.is-dragging * {
   box-shadow: 0 6px 18px color-mix(in oklab, var(--ink) 22%, transparent);
 }
 
+.block-resize {
+  position: absolute;
+  inset-inline: 20%;
+  bottom: 0;
+  height: 10px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.block-resize::after {
+  content: '';
+  position: absolute;
+  inset-inline: 30%;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hue);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.block:hover .block-resize::after,
+.block:focus-visible .block-resize::after {
+  opacity: 0.6;
+}
+
+@media (hover: none) {
+  .block-resize {
+    height: 16px;
+  }
+
+  .block-resize::after {
+    opacity: 0.45;
+  }
+}
+
+.block.drag-ghost.is-conflict {
+  border-color: #d93a3a;
+  background: color-mix(in oklab, #d93a3a 16%, var(--surface));
+}
+
+.block.drag-ghost.is-conflict .block-tag {
+  background: #d93a3a;
+  color: #fff;
+}
+
 .drag-hint {
   margin: 0.25rem 0 0.5rem;
   font-size: 0.8125rem;
 }
 
 @media print {
-  .drag-hint {
+  .block-resize {
+  position: absolute;
+  inset-inline: 20%;
+  bottom: 0;
+  height: 10px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.block-resize::after {
+  content: '';
+  position: absolute;
+  inset-inline: 30%;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hue);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.block:hover .block-resize::after,
+.block:focus-visible .block-resize::after {
+  opacity: 0.6;
+}
+
+@media (hover: none) {
+  .block-resize {
+    height: 16px;
+  }
+
+  .block-resize::after {
+    opacity: 0.45;
+  }
+}
+
+.block.drag-ghost.is-conflict {
+  border-color: #d93a3a;
+  background: color-mix(in oklab, #d93a3a 16%, var(--surface));
+}
+
+.block.drag-ghost.is-conflict .block-tag {
+  background: #d93a3a;
+  color: #fff;
+}
+
+.drag-hint {
     display: none;
   }
 }
@@ -1510,4 +1602,15 @@ body.is-dragging * {
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;
+}
+
+.version-note .import-actions {
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+@media print {
+  .version-note {
+    display: none;
+  }
 }

@@ -223,6 +223,21 @@ function sideBySide(blocks: Block[]): Block[] {
   return blocks
 }
 
+/** בלוקים שהצל נוחת עליהם: לא הבלוק עצמו, לא משבצת הבחירה שלו, לא מבוטלים ולא חלונות תרגול פתוחים */
+export function conflictsOf(blocks: Block[], g: { id: string; day: DayIndex; start: Minutes; len: Minutes }): Block[] {
+  const group = g.id.split(':')[0]
+  return blocks.filter(
+    (b) =>
+      b.day === g.day &&
+      b.id !== g.id &&
+      b.id.split(':')[0] !== group &&
+      !b.isCancelled &&
+      b.type !== 'practice' &&
+      b.start < g.start + g.len &&
+      g.start < b.end,
+  )
+}
+
 /** טווח השעות שהלוח מציג: ההגדרות, מורחב אם יש שיעור שחורג מהן. מעוגל לשעות שלמות */
 export function visibleRange(data: ScheduleData, blocks: Block[]): { start: Minutes; end: Minutes } {
   let start = data.settings.dayStart

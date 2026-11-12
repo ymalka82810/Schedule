@@ -66,3 +66,9 @@ export function fromTimeInput(v: string): Minutes | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(v)
   return m ? Number(m[1]) * 60 + Number(m[2]) : null
 }
+
+/** "18.10.2026" → "2026-10-18", או undefined */
+export function fromDotted(s: string | undefined): string | undefined {
+  const m = s ? /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s.trim()) : null
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : undefined
+}

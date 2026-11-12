@@ -12,6 +12,7 @@ import type {
   Slot,
 } from '../types'
 import type { PlannedSession } from './plan'
+import { fromDotted } from './time'
 
 /**
  * עריכה ישירה של המערכת השמורה (שלב 2). כל פעולה מקבלת נתונים ומחזירה נתונים חדשים, בלי לשנות את המקור.
@@ -365,4 +366,25 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
   const lessonIds = new Set(full.lessons.map((l) => l.id))
   if (full.entries.some((e) => !lessonIds.has(e.lessonId))) return { error: 'בקובץ יש שיבוץ לשיעור שלא קיים.' }
   return { data: full }
+}
+
+/** אחרי כמה ימים מתאריך הגרסה להזכיר לבדוק אם המוסד שלח גרסה חדשה */
+export const VERSION_REMINDER_DAYS = 21
+
+/**
+ * האם להזכיר לבדוק גרסה חדשה של המערכת: עברו שלושה שבועות מתאריך הגרסה (או מהייבוא, אם אין תאריך),
+ * ולא נדחתה התזכורת. מחזיר כמה ימים עברו, או null
+ */
+export function versionAge(data: ScheduleData, today: string): number | null {
+  const src = data.source
+  if (!src) return null
+  if (src.remindAfter && today < src.remindAfter) return null
+  const from = fromDotted(src.versionDate) ?? src.importedAt.slice(0, 10)
+  const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 864e5)
+  return Number.isFinite(days) && days >= VERSION_REMINDER_DAYS ? days : null
+}
+
+/** דחיית התזכורת לבדוק גרסה חדשה */
+export function snoozeVersionReminder(data: ScheduleData, until: string): ScheduleData {
+  return data.source ? { ...data, source: { ...data.source, remindAfter: until } } : data
 }

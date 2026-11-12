@@ -161,6 +161,8 @@ export function movePlanned(
   weekStart: Date,
   toDay: DayIndex,
   toStart: Minutes,
+  /** אורך חדש (שינוי אורך מהקצה). חסר = כמו שהיה */
+  toEnd: Minutes = toStart + (session.end - session.start),
 ): ScheduleData {
   const pins = data.planPins ?? []
   const existing = session.pinId ? pins.find((p) => p.id === session.pinId) : undefined
@@ -168,7 +170,11 @@ export function movePlanned(
     ? { date: existing.fromDate, start: existing.fromStart }
     : { date: dateOfDay(weekStart, session.day), start: session.start }
   const toDate = dateOfDay(weekStart, toDay)
-  if (existing && toDate === from.date && toStart === from.start) return unpinPlanned(data, existing.id)
+  const len = toEnd - toStart
+  const origLen = existing
+    ? (existing.fromEnd ?? existing.fromStart + (existing.end - existing.start)) - existing.fromStart
+    : session.end - session.start
+  if (existing && toDate === from.date && toStart === from.start && len === origLen) return unpinPlanned(data, existing.id)
 
   const fromDay = dayOfDate(weekStart, from.date) ?? session.day
   const feedback = data.planFeedback ?? []
@@ -188,7 +194,8 @@ export function movePlanned(
     goalId: session.goalId,
     date: toDate,
     start: toStart,
-    end: toStart + (session.end - session.start),
+    end: toEnd,
+    fromEnd: from.start + origLen,
     ...(session.reviewId ? { reviewId: session.reviewId } : {}),
     fromDate: from.date,
     fromStart: from.start,

@@ -185,3 +185,17 @@ export const removeReview = (data: ScheduleData, id: string): ScheduleData => ({
   ...data,
   reviews: (data.reviews ?? []).filter((r) => r.id !== id),
 })
+
+/** מה נרשם ב"איפה נתקעתי" במפגש האחרון של היעד לפני התאריך, כנקודת התחלה למפגש הבא */
+export function lastStuck(
+  data: ScheduleData,
+  goalId: string,
+  before: string,
+  beforeStart = 0,
+): { stuck: string; date: string } | null {
+  const last = (data.log ?? [])
+    .filter((l) => l.goalId === goalId && !l.reviewId && (l.date < before || (l.date === before && l.end <= beforeStart)))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start)
+    .at(-1)
+  return last?.stuck ? { stuck: last.stuck, date: last.date } : null
+}

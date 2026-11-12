@@ -9,7 +9,20 @@ import { Today } from './components/Today'
 import { breakOn, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
 import { LoginDialog } from './components/LoginDialog'
-import { clearMove, moveForever, moveOnce, refIdOf, resolveBlock, saveEvent, slotOf, type BlockTarget } from './lib/edit'
+import {
+  clearMove,
+  moveForever,
+  moveOnce,
+  refIdOf,
+  resolveBlock,
+  saveEvent,
+  setActivityDays,
+  siblings,
+  snoozeVersionReminder,
+  versionAge,
+  slotOf,
+  type BlockTarget,
+} from './lib/edit'
 import { MoveDialog } from './components/MoveDialog'
 import { learnedPrefs, movePlanned } from './lib/prefs'
 import { moveOf } from './lib/plan'
@@ -24,7 +37,17 @@ type Dialog =
   | { kind: 'event'; event: OneOffEvent | { date: string } }
   | { kind: 'session'; session: PlannedSession; goal: Goal }
   | { kind: 'goals' }
-  | { kind: 'move'; target: BlockTarget; name: string; refId: string; date: string; from: Slot; to: Slot; alreadyMoved: boolean }
+  | {
+      kind: 'move'
+      target: BlockTarget
+      name: string
+      refId: string
+      date: string
+      from: Slot
+      to: Slot
+      alreadyMoved: boolean
+      siblings: number
+    }
 
 interface Props {
   initialData: ScheduleData
@@ -90,6 +113,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   }, [data, thisWeek, todayIso])
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
   const isEmpty = blocks.length === 0
+  const versionDays = useMemo(() => versionAge(data, todayIso), [data, todayIso])
 
   const isThisWeek = isSameDay(weekStart, startOfWeek(now))
   const goToThisWeek = () => {
@@ -164,11 +188,11 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   }
 
   /** גרירה של בלוק למקום חדש בשבוע המוצג */
-  const handleBlockMove = (blockId: string, day: DayIndex, start: Minutes) => {
+  const handleBlockMove = (blockId: string, day: DayIndex, start: Minutes, end: Minutes) => {
     const target = resolveBlock(data, blockId, plan.sessions)
     const block = blocks.find((b) => b.id === blockId)
     if (!target || !block) return
-    const len = block.end - block.start
+    const len = end - start
     const toDate = dateOfDay(weekStart, day)
 
     if (target.kind === 'event') {
@@ -178,7 +202,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
 
     if (target.kind === 'plan') {
       if (target.session.done) return
-      const next = movePlanned(data, target.session, weekStart, day, start)
+      const next = movePlanned(data, target.session, weekStart, day, start, end)
       // אם ההזזה הזו השלימה דפוס, מספרים מה נלמד
       const before = new Set(learnedPrefs(data).map((p) => p.label))
       const learned = learnedPrefs(next).find((p) => !before.has(p.label))
@@ -198,7 +222,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
     const date = dateOfDay(weekStart, fixed.day)
     const alreadyMoved = !!moveOf(data, refId, date)
     // החזרה בדיוק למקום הקבוע מבטלת את ההזזה של השבוע, בלי לשאול
-    if (day === fixed.day && start === fixed.start) {
+    if (day === fixed.day && start === fixed.start && end === fixed.end) {
       if (alreadyMoved) commit(clearMove(data, refId, date), backup, 'השיבוץ חזר למקום הקבוע')
       return
     }
@@ -209,8 +233,9 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       refId,
       date,
       from: fixed,
-      to: { day, start, end: start + len },
+      to: { day, start, end },
       alreadyMoved,
+      siblings: target.kind === 'entry' ? siblings(data, target.entry.id).length : 1,
     })
   }
 
@@ -327,6 +352,27 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         </p>
       )}
 
+      {versionDays !== null && (
+        <section className="mode-note version-note" aria-label="תזכורת לגרסה חדשה">
+          <p>
+            המערכת שלך {data.source?.versionDate ? `מעודכנת ל-${data.source.versionDate}` : 'יובאה'}, לפני{' '}
+            {Math.round(versionDays / 7)} שבועות. אם המוסד שלח גרסה חדשה, אפשר לייבא אותה ולראות רק מה השתנה.
+          </p>
+          <div className="import-actions">
+            <button type="button" className="btn" onClick={() => setImporting(true)}>
+              ייבוא גרסה חדשה
+            </button>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => commit(snoozeVersionReminder(data, isoDate(addDays(now, 14))), backup, 'אזכיר שוב בעוד שבועיים')}
+            >
+              הזכר לי בעוד שבועיים
+            </button>
+          </div>
+        </section>
+      )}
+
       {!isEmpty && (
         <Today
           blocks={todayBlocks}
@@ -359,7 +405,8 @@ export default function App({ initialData, initialBackup, account, onPersist, in
 
       {!isEmpty && (
         <p className="muted drag-hint">
-          אפשר לגרור שיעור, אירוע או מפגש מתוכנן לשעה אחרת. בטלפון: לחיצה ארוכה ואז גרירה.
+          אפשר לגרור שיעור, אירוע או מפגש מתוכנן לשעה אחרת, ולשנות אורך מהקצה התחתון. בטלפון: לחיצה ארוכה ואז גרירה.
+          במקלדת: חצים על בלוק מסומן, ו-Enter לאישור.
         </p>
       )}
 
@@ -404,6 +451,14 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           from={dialog.from}
           to={dialog.to}
           alreadyMoved={dialog.alreadyMoved}
+          siblings={dialog.siblings}
+          onAllDays={() => {
+            if (dialog.target.kind !== 'entry') return
+            const days = siblings(data, dialog.target.entry.id).map((e) => e.slot.day)
+            const next = setActivityDays(data, dialog.target.entry.id, days, dialog.to.start, dialog.to.end)
+            commit(clearMove(next, dialog.refId, dialog.date), backup, `השעה השתנתה בכל ${days.length} הימים`)
+            setDialog(null)
+          }}
           onOnce={() => {
             const to = dialog.to
             commit(

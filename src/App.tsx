@@ -243,7 +243,13 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         </div>
       </header>
 
-      {account.kind === 'owner' ? (
+      {account.kind === 'offline' ? (
+        <p className="mode-note is-offline" role="status">
+          אין חיבור לשרת. מוצגת המערכת כפי שנשמרה במכשיר ב-
+          {new Date(account.savedAt).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}. שינויים
+          שתעשה עכשיו לא יישמרו.
+        </p>
+      ) : account.kind === 'owner' ? (
         <p className="mode-note is-owner">
           מחובר כ-<bdi dir="ltr">{account.email}</bdi>. המערכת נשמרת בשרת.
         </p>

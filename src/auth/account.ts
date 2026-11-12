@@ -3,6 +3,7 @@
  * - local: אין שרת מחובר (פיתוח מקומי או שעוד לא הוגדר Convex). הכול בזיכרון.
  * - guest: סביבת בדיקה פתוחה לכולם. הכול בזיכרון, אין חשבון. אפשר להיכנס כבעלים עם קוד למייל.
  * - owner: הבעלים, מחובר. המערכת נשמרת בשרת.
+ * - offline: הבעלים בלי חיבור לשרת. מוצג העותק האחרון שנשמר במכשיר, לקריאה בלבד.
  */
 export type Account =
   | { kind: 'local' }
@@ -14,3 +15,4 @@ export type Account =
       verifyCode: (email: string, code: string) => Promise<boolean>
     }
   | { kind: 'owner'; email: string; signOut: () => void }
+  | { kind: 'offline'; email: string; savedAt: string }

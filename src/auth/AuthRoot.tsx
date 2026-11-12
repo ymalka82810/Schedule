@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { clearOwnerCache, loadOwnerCache, saveOwnerCache } from './offlineCache'
 import { ConvexReactClient, useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react'
 import { anyApi } from 'convex/server'
@@ -15,6 +16,38 @@ export function AuthRoot({ url }: { url: string }) {
       <Router />
     </ConvexAuthProvider>
   )
+}
+
+/**
+ * בזמן ההמתנה לשרת: אם אין רשת, או שההמתנה ארוכה, ויש עותק של המערכת במכשיר,
+ * מציגים אותו לקריאה. כשהחיבור חוזר, הדף מתחלף לבד למערכת מהשרת.
+ */
+function WaitOrOffline() {
+  const [slow, setSlow] = useState(false)
+  const [offline, setOffline] = useState(() => !navigator.onLine)
+  useEffect(() => {
+    const t = window.setTimeout(() => setSlow(true), 4000)
+    const on = () => setOffline(false)
+    const off = () => setOffline(true)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.clearTimeout(t)
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+  const cache = useMemo(() => loadOwnerCache(), [])
+  if (cache && (offline || slow)) {
+    return (
+      <App
+        initialData={cache.data}
+        initialBackup={cache.backup}
+        account={{ kind: 'offline', email: cache.email, savedAt: cache.savedAt }}
+      />
+    )
+  }
+  return <Loading />
 }
 
 function Loading() {
@@ -41,10 +74,19 @@ function Router() {
     if (wrongAccount) void signOut()
   }, [wrongAccount, signOut])
 
-  if (isLoading || (isAuthenticated && me === undefined)) return <Loading />
+  const waiting = isLoading || (isAuthenticated && me === undefined)
+  if (waiting) return <WaitOrOffline />
 
   if (isAuthenticated && me?.isOwner && me.email) {
-    return <OwnerApp email={me.email} signOut={() => void signOut()} />
+    return (
+      <OwnerApp
+        email={me.email}
+        signOut={() => {
+          clearOwnerCache()
+          void signOut()
+        }}
+      />
+    )
   }
 
   return (
@@ -82,14 +124,21 @@ function OwnerApp({ email, signOut }: { email: string; signOut: () => void }) {
     }
   }, [doc, save])
 
-  if (doc === undefined) return <Loading />
+  useEffect(() => {
+    if (doc) saveOwnerCache({ email, data: doc.data, backup: doc.backup })
+  }, [doc, email])
+
+  if (doc === undefined) return <WaitOrOffline />
 
   return (
     <App
       initialData={doc?.data ?? initialData}
       initialBackup={doc?.backup ?? null}
       account={{ kind: 'owner', email, signOut }}
-      onPersist={(data, backup) => void save({ data, backup })}
+      onPersist={(data, backup) => {
+        saveOwnerCache({ email, data, backup })
+        void save({ data, backup })
+      }}
     />
   )
 }

@@ -105,4 +105,12 @@ export interface ScheduleData {
   goals: Goal[]
   events: OneOffEvent[]
   settings: Settings
+  /** מאיזה קובץ נבנתה המערכת. חסר אם לא יובאה מקובץ */
+  source?: {
+    fileName: string
+    /** התאריך שכתוב בקובץ ("מעודכנת נכון לתאריך..."), אם נמצא */
+    versionDate?: string
+    /** ISO */
+    importedAt: string
+  }
 }

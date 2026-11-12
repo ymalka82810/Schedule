@@ -86,6 +86,9 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         <div className="top-title">
           <h1>המערכת שלי</h1>
           <p className="top-range">{formatWeekRange(weekStart)}</p>
+          {data.source?.versionDate && (
+            <p className="muted">לפי המערכת המעודכנת ל-{data.source.versionDate}</p>
+          )}
         </div>
 
         <div className="top-actions">

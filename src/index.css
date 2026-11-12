@@ -990,3 +990,56 @@ p {
 .dialog-compact .dialog-body {
   max-height: calc(100dvh - 6rem);
 }
+
+/* ---------- מה השתנה בגרסה החדשה ---------- */
+.changes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.change {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  font-size: 0.9375rem;
+}
+
+.change-kind {
+  flex: none;
+  min-width: 3.5rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.change.is-added .change-kind {
+  border-color: #5b8c2a;
+  color: #3f6a17;
+}
+
+.change.is-removed .change-kind {
+  border-color: #b3261e;
+  color: #b3261e;
+}
+
+.change.is-moved .change-kind,
+.change.is-changed .change-kind {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+:root[data-theme='dark'] .change.is-added .change-kind {
+  color: #9ccc65;
+}
+
+:root[data-theme='dark'] .change.is-removed .change-kind {
+  color: #ff8a80;
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeSubject, parseBlockText } from '../parseCell'
 import { TEACHERS } from './fixtures'
+import { findVersionDate } from '../parseSchedule'
+import type { RawWord } from '../raw'
 
 const parse = (s: string) => parseBlockText(s, TEACHERS)
 
@@ -40,5 +42,19 @@ describe('normalizeSubject', () => {
   it('מאחד כתיב ומנקה סימנים', () => {
     expect(normalizeSubject('"פיסיקה"')).toBe('פיזיקה')
     expect(normalizeSubject(' מתמטיקה- ')).toBe('מתמטיקה')
+  })
+})
+
+describe('findVersionDate', () => {
+  const word = (text: string, y: number): RawWord => ({ text, x: 0, y, w: 10, h: 10, font: 'f' })
+  const page = (words: RawWord[]) => ({ width: 800, height: 600, words, hLines: [], vLines: [] })
+
+  it('מעדיף את התאריך שליד "מעודכנת"', () => {
+    const words = [word('1.9.2026', 100), word('מעודכנת', 580), word('לתאריך', 580), word('18.10.2026', 580)]
+    expect(findVersionDate([page(words)])).toBe('18.10.2026')
+  })
+
+  it('בלי תאריך מחזיר כלום', () => {
+    expect(findVersionDate([page([word('מערכת', 500)])])).toBeUndefined()
   })
 })

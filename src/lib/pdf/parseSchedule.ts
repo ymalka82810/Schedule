@@ -175,6 +175,28 @@ function parseTimetable(table: Table, tt: Timetable, teachers: Teacher[], warnin
   return merged
 }
 
+const DATE = /(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4})(?!\d)/
+
+/**
+ * התאריך של הגרסה ("מעודכנת נכון לתאריך 18.10.2026"). מחפשים קודם ליד המילה "מעודכנת",
+ * ואם אין, את התאריך הראשון בעמוד. כל מילה נבדקת לבד, כי סדר המילים בשכבת הטקסט לא אמין.
+ */
+export function findVersionDate(pages: RawPage[]): string | undefined {
+  for (const page of pages) {
+    const dates = page.words
+      .map((w) => ({ w, m: DATE.exec(w.text) }))
+      .filter((d): d is { w: RawWord; m: RegExpExecArray } => d.m !== null)
+    if (!dates.length) continue
+    const marker = page.words.find((w) => /מעודכנ/.test(w.text))
+    const pick = marker
+      ? [...dates].sort((a, b) => Math.abs(a.w.y - marker.y) - Math.abs(b.w.y - marker.y))[0]
+      : dates[0]
+    const [, d, m, y] = pick.m
+    return `${Number(d)}.${Number(m)}.${y}`
+  }
+  return undefined
+}
+
 /** מפענח את כל העמודים של ה-PDF לטיוטת מערכת */
 export function parsePages(pages: RawPage[]): DraftSchedule {
   seq = 0
@@ -199,5 +221,5 @@ export function parsePages(pages: RawPage[]): DraftSchedule {
   if (!found) warnings.push('לא מצאתי בקובץ טבלת מערכת שעות. אולי הקובץ סרוק או בנוי אחרת.')
   else if (!teachers.length) warnings.push('לא מצאתי טבלת מרצים, ולכן לא הושלמו חדרים ושמות מלאים.')
 
-  return { items, warnings }
+  return { items, warnings, versionDate: findVersionDate(pages) }
 }

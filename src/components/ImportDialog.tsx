@@ -6,6 +6,7 @@ import { DAYS, DAY_NAMES, formatTime, fromTimeInput as fromInput, startOfWeek, t
 import type { DraftItem, DraftOption, DraftSchedule } from '../lib/pdf/draft'
 import { readSchedulePdf } from '../lib/pdf/extract'
 import { fromBackup, toBackup } from '../lib/edit'
+import { diffSchedules, hasImported, type Change } from '../lib/diff'
 import { draftToData, validateDraft } from '../lib/pdf/toSchedule'
 import {
   applySelection,
@@ -98,6 +99,10 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   const range = useMemo(() => visibleRange(preview, blocks), [preview, blocks])
   const problems = useMemo(() => validateDraft(draft.items), [draft.items])
   const conflicts = useMemo(() => findConflicts(draft.items), [draft.items])
+  const changes = useMemo(
+    () => (hasImported(current) ? diffSchedules(current, draftToData(draft.items, current)) : null),
+    [draft.items, current],
+  )
 
   const firstDayOf = (items: DraftItem[]) => items.reduce<number>((d, i) => Math.min(d, i.day), 6) as DayIndex
 
@@ -193,8 +198,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   }
 
   const save = () => {
-    if (problems.length) return
-    onSave(draftToData(draft.items, current))
+    if (problems.length || step.name !== 'review') return
+    onSave(draftToData(draft.items, current, { fileName: step.fileName, versionDate: draft.versionDate }))
   }
 
   const checkCount = draft.items.filter((i) => i.check).length
@@ -316,6 +321,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                 ))}
               </section>
 
+              {changes && <ChangesSummary changes={changes} current={current} versionDate={draft.versionDate} />}
+
               <WeekGrid
                 weekStart={weekStart}
                 blocks={blocks}
@@ -420,6 +427,57 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
         )}
       </div>
     </div>
+  )
+}
+
+const CHANGE_TITLES: Record<Change['kind'], string> = {
+  added: 'נוסף',
+  removed: 'בוטל',
+  moved: 'זז',
+  changed: 'השתנה',
+}
+
+const when = (c: { day: DayIndex; start: number; end: number }) =>
+  `${DAY_NAMES[c.day]} ${formatTime(c.start)}–${formatTime(c.end)}`
+
+/** מה השתנה מול המערכת השמורה: לייבוא של גרסה מעודכנת מהמוסד */
+function ChangesSummary({
+  changes,
+  current,
+  versionDate,
+}: {
+  changes: Change[]
+  current: ScheduleData
+  versionDate?: string
+}) {
+  const src = current.source
+  const from = src ? `${src.fileName}${src.versionDate ? `, מעודכנת ל-${src.versionDate}` : ''}` : null
+  return (
+    <section className="import-summary changes" aria-label="מה השתנה">
+      <h3 className="import-subtitle">מה השתנה מול המערכת השמורה</h3>
+      <p className="import-note">
+        {from ? `השמורה נבנתה מ-${from}.` : 'משווה לשיעורים מהקובץ במערכת השמורה.'}
+        {versionDate && ` בקובץ החדש: מעודכנת ל-${versionDate}.`} שיעורים אישיים, צבעים ובחירות במשבצות בחירה נשמרים.
+      </p>
+      {changes.length === 0 ? (
+        <p>אין שינויים בשיעורים.</p>
+      ) : (
+        <ul className="changes-list">
+          {changes.map((c, i) => (
+            <li key={i} className={`change is-${c.kind}`}>
+              <span className="change-kind">{CHANGE_TITLES[c.kind]}</span>
+              <span>
+                {c.label}, <bdi>{when(c)}</bdi>
+                {c.kind === 'moved' && c.before && (
+                  <span className="muted"> (היה {when(c.before)})</span>
+                )}
+                {c.kind === 'changed' && c.before && <span className="muted"> (היה {c.before.label})</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

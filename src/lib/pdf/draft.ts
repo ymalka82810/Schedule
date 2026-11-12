@@ -30,4 +30,6 @@ export interface DraftSchedule {
   warnings: string[]
   /** שמות הקבצים/כותרות שזוהו, לתצוגה */
   title?: string
+  /** התאריך שכתוב בקובץ, למשל "18.10.2026" ב"מעודכנת נכון לתאריך" */
+  versionDate?: string
 }

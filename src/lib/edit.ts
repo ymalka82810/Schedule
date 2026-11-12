@@ -161,6 +161,7 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     events: Array.isArray(data.events) ? (data.events as ScheduleData['events']) : [],
     settings: data.settings as unknown as ScheduleData['settings'],
   }
+  if (isObj(data.source)) full.source = data.source as unknown as ScheduleData['source']
   const lessonIds = new Set(full.lessons.map((l) => l.id))
   if (full.entries.some((e) => !lessonIds.has(e.lessonId))) return { error: 'בקובץ יש שיבוץ לשיעור שלא קיים.' }
   return { data: full }

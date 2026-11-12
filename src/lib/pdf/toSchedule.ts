@@ -1,12 +1,24 @@
-import type { ChoiceGroup, ColorKey, FixedEntry, Lesson, ScheduleData } from '../../types'
+import type { ChoiceGroup, ColorKey, FixedEntry, Lesson, ScheduleData, Slot } from '../../types'
 import type { DraftItem, DraftOption } from './draft'
 
 const PALETTE: ColorKey[] = ['cobalt', 'coral', 'amber', 'moss', 'teal', 'rose', 'slate', 'plum']
 
 const lessonKey = (o: DraftOption) => `${o.name}|${o.teacher ?? ''}|${o.group ?? ''}|${o.room ?? ''}`
+/** זהות של שיעור בין גרסאות: שם, מרצה וקבוצה (החדר יכול להשתנות) */
+const identity = (l: { name: string; teacher?: string; group?: string }) =>
+  `${l.name.trim()}|${l.teacher?.trim() ?? ''}|${l.group?.trim() ?? ''}`
 
-/** יוצר נתוני מערכת מהטיוטה. base = מה שכבר שמור: שיעורים אישיים והגדרות נשמרים */
-export function draftToData(items: DraftItem[], base: ScheduleData): ScheduleData {
+export interface SourceInfo {
+  fileName: string
+  /** "18.10.2026", כפי שנכתב בקובץ */
+  versionDate?: string
+}
+
+/**
+ * יוצר נתוני מערכת מהטיוטה. base = מה שכבר שמור: שיעורים אישיים והגדרות נשמרים,
+ * וגם ההתאמות האישיות בשיעורים מהקובץ: הצבע של כל מקצוע והבחירות במשבצות בחירה.
+ */
+export function draftToData(items: DraftItem[], base: ScheduleData, source?: SourceInfo): ScheduleData {
   const personalIds = new Set(base.lessons.filter((l) => l.personal).map((l) => l.id))
   const lessons: Lesson[] = base.lessons.filter((l) => l.personal)
   const entries: FixedEntry[] = base.entries.filter((e) => personalIds.has(e.lessonId))
@@ -15,14 +27,21 @@ export function draftToData(items: DraftItem[], base: ScheduleData): ScheduleDat
   )
 
   const lessonIds = new Map<string, string>()
+  // צבע שכבר נבחר למקצוע נשמר גם בגרסה החדשה
   const colors = new Map<string, ColorKey>()
+  for (const l of base.lessons) if (!colors.has(l.name)) colors.set(l.name, l.color)
+  const fresh = PALETTE.filter((c) => ![...colors.values()].includes(c))
+  let freshIndex = 0
   let n = 0
 
   const lessonFor = (o: DraftOption): string => {
     const key = lessonKey(o)
     const existing = lessonIds.get(key)
     if (existing) return existing
-    if (!colors.has(o.name)) colors.set(o.name, PALETTE[colors.size % PALETTE.length])
+    if (!colors.has(o.name)) {
+      colors.set(o.name, fresh[freshIndex] ?? PALETTE[(colors.size + freshIndex) % PALETTE.length])
+      freshIndex++
+    }
     const id = `p${++n}`
     lessons.push({
       id,
@@ -46,11 +65,28 @@ export function draftToData(items: DraftItem[], base: ScheduleData): ScheduleDat
     if (ids.length === 1) {
       entries.push({ id: item.id, slot, lessonId: ids[0] })
     } else {
-      choiceGroups.push({ id: item.id, slot, optionLessonIds: ids, chosenLessonId: null })
+      choiceGroups.push({ id: item.id, slot, optionLessonIds: ids, chosenLessonId: chosenFrom(base, slot, ids, lessons) })
     }
   })
 
-  return { ...base, lessons, entries, choiceGroups }
+  const next: ScheduleData = { ...base, lessons, entries, choiceGroups }
+  if (source) next.source = { ...source, importedAt: new Date().toISOString() }
+  return next
+}
+
+/** בחירה קודמת במשבצת חופפת באותו יום, אם השיעור שנבחר אז קיים גם עכשיו */
+function chosenFrom(base: ScheduleData, slot: Slot, ids: string[], lessons: Lesson[]): string | null {
+  const baseLessons = new Map(base.lessons.map((l) => [l.id, l]))
+  const byId = new Map(lessons.map((l) => [l.id, l]))
+  for (const g of base.choiceGroups) {
+    if (!g.chosenLessonId || g.slot.day !== slot.day) continue
+    if (!(g.slot.start < slot.end && slot.start < g.slot.end)) continue
+    const old = baseLessons.get(g.chosenLessonId)
+    if (!old) continue
+    const match = ids.find((id) => identity(byId.get(id)!) === identity(old))
+    if (match) return match
+  }
+  return null
 }
 
 /** בדיקות לפני שמירה. מחזיר רשימת בעיות, ריקה אם הכול תקין */

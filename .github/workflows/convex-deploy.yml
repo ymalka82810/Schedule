@@ -1,0 +1,45 @@
+name: "Convex: deploy"
+
+# מעלה את קוד השרת (convex/) ל-Convex בכל שינוי בו, או בהרצה ידנית.
+# דורש את הסוד CONVEX_DEPLOY_KEY (Production deploy key). בלעדיו הזרימה מדלגת בשקט.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "convex/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/convex-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: convex-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+    steps:
+      - name: בדיקה שהוגדר מפתח פריסה
+        id: key
+        run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+            echo "אין CONVEX_DEPLOY_KEY, מדלגים."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.present == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.key.outputs.present == 'true'
+      - run: npx convex deploy
+        if: steps.key.outputs.present == 'true'

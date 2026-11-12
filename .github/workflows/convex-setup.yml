@@ -1,0 +1,24 @@
+name: "Convex: setup env"
+
+# הרצה חד-פעמית (ידנית): יוצרת מפתחות התחברות ומגדירה ב-Convex את המייל המורשה ופרטי Google.
+# הערכים נלקחים מ-GitHub Secrets ולא מודפסים ביומן.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      ALLOWED_EMAIL: ${{ secrets.ALLOWED_EMAIL }}
+      AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
+      AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/setup-convex-env.mjs

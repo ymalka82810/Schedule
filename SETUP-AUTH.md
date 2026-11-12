@@ -7,6 +7,30 @@
 
 כל עוד `VITE_CONVEX_URL` לא מוגדר, האתר רץ רק כסביבת בדיקה, בלי כפתור כניסה.
 
+## מהטלפון, בלי טרמינל (הדרך המומלצת)
+
+GitHub Actions עושים את עבודת השרת. אתה רק יוצר חשבונות ומדביק ערכים בדפדפן.
+
+1. **Convex:** ב-dashboard.convex.dev התחבר עם GitHub וצור פרויקט חדש. בפרויקט, Settings, URL & Deploy Key:
+   - העתק את **Production deploy key** (Generate אם אין).
+   - רשום את שתי הכתובות של הפרודקשן: `…convex.cloud` ו-`…convex.site`.
+2. **Google Cloud Console** (console.cloud.google.com, במצב "אתר למחשב"):
+   - APIs & Services, OAuth consent screen: סוג External, והוסף את המייל שלך כ-Test user.
+   - Credentials, Create credentials, OAuth client ID, סוג Web application.
+   - Authorized redirect URI: `https://<שם-הפריסה>.convex.site/api/auth/callback/google`
+   - העתק את Client ID ואת Client Secret.
+3. **GitHub:** בריפו, Settings, Secrets and variables, Actions.
+   - לשונית **Secrets**, ארבעה סודות: `CONVEX_DEPLOY_KEY`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `ALLOWED_EMAIL` (המייל שלך).
+   - לשונית **Variables**: `VITE_CONVEX_URL` עם כתובת ה-`.convex.cloud`.
+4. **הרצות ב-Actions** (לשונית Actions, בוחרים זרימה, Run workflow), לפי הסדר:
+   1. `Convex: deploy`
+   2. `Convex: setup env`
+   3. `Deploy to GitHub Pages`
+
+מפתחות ההתחברות נוצרים בהרצה 2 ונכנסים ישר ל-Convex, בלי שאתה או הצ'אט רואים אותם. אפשר להריץ את `setup env` שוב אם משנים סוד, והמפתחות הקיימים לא יוחלפו.
+
+## מהמחשב (חלופה)
+
 ## 1. פרויקט Convex
 
 ```bash

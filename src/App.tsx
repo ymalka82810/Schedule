@@ -6,7 +6,7 @@ import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { EventDialog, SessionDialog } from './components/EventDialogs'
 import { GoalsDialog } from './components/GoalsDialog'
 import { Today } from './components/Today'
-import { planWeek, type PlannedSession } from './lib/plan'
+import { breakOn, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
 import { LoginDialog } from './components/LoginDialog'
 import { resolveBlock } from './lib/edit'
@@ -58,6 +58,15 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   // התכנון של הזמן הפנוי מחושב מחדש לכל שבוע: אירועים וביטולים משנים אותו
   const plan = useMemo(() => planWeek(data, weekStart), [data, weekStart])
   const blocks = useMemo(() => buildBlocks(data, { weekStart, plan: plan.sessions }), [data, weekStart, plan])
+
+  const dayNotes = useMemo(() => {
+    const out: Partial<Record<DayIndex, string>> = {}
+    for (const d of [0, 1, 2, 3, 4, 5, 6] as DayIndex[]) {
+      const b = breakOn(data, dateOfDay(weekStart, d))
+      if (b) out[d] = b.title
+    }
+    return out
+  }, [data, weekStart])
 
   // לכרטיס "היום": תמיד השבוע של היום והשבוע שאחריו, בלי קשר לשבוע המוצג
   const thisWeek = useMemo(() => startOfWeek(now), [now])
@@ -198,7 +207,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
           </button>
 
           <button type="button" className="btn" onClick={() => setDialog({ kind: 'event', event: { date: newEventDate() } })}>
-            ＋ אירוע
+            ＋ אירוע, מבחן או חופשה
           </button>
 
           <button type="button" className="btn" onClick={() => setDialog({ kind: 'goals' })}>
@@ -282,6 +291,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
         onBlockClick={openBlock}
+        dayNotes={dayNotes}
       />
 
       {dialog?.kind === 'lesson' && (

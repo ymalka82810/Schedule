@@ -1,5 +1,5 @@
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
-import { activeOn, isCancelled, type PlannedSession } from './plan'
+import { activeOn, breakOn, isCancelled, type PlannedSession } from './plan'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
 
@@ -46,8 +46,10 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
     weekStart ? isCancelled(data, refId, dateOfDay(weekStart, day)) : false
   const tagOf = (refId: string, day: DayIndex) => {
     if (!weekStart || !cancelled(refId, day)) return undefined
-    const h = dayInfo(dateOfDay(weekStart, day)).holiday
-    return h?.kind === 'chag' ? h.name : 'בוטל השבוע'
+    const date = dateOfDay(weekStart, day)
+    const h = dayInfo(date).holiday
+    if (h?.kind === 'chag') return h.name
+    return breakOn(data, date)?.title ?? 'בוטל השבוע'
   }
 
   // בשבוע מסוים: שיעור שלא בתוקף בתאריך שלו לא מוצג
@@ -132,6 +134,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
         isOption: false,
         isOpen: false,
         type: 'event',
+        cancelTag: ev.examSubject ? 'מבחן' : undefined,
       })
     }
   }

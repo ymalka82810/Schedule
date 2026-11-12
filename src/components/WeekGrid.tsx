@@ -13,9 +13,11 @@ interface Props {
   onSelectDay: (day: DayIndex) => void
   /** לחיצה על בלוק. בלי זה הבלוקים לתצוגה בלבד */
   onBlockClick?: (blockId: string) => void
+  /** הערה לכל יום, למשל שם חופשה */
+  dayNotes?: Partial<Record<DayIndex, string>>
 }
 
-export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectDay, onBlockClick }: Props) {
+export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectDay, onBlockClick, dayNotes }: Props) {
   const hours: number[] = []
   for (let m = range.start; m < range.end; m += 60) hours.push(m)
 
@@ -44,6 +46,7 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
               <span className="day-date">{date.getDate()}</span>
               <span className="day-hebrew">{info.hebrew}</span>
               {info.holiday && <span className="day-holiday">{info.holiday.name}</span>}
+              {dayNotes?.[day] && <span className="day-holiday">{dayNotes[day]}</span>}
             </button>
           )
         })}
@@ -106,7 +109,7 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                     {b.isOption && <span className="block-tag">לבחירה</span>}
                     {b.isOpen && <span className="block-tag">לבחירתך</span>}
                     {b.isCancelled && <span className="block-tag">{b.cancelTag ?? 'בוטל השבוע'}</span>}
-                    {b.type === 'event' && <span className="block-tag">אירוע</span>}
+                    {b.type === 'event' && <span className="block-tag">{b.cancelTag ?? 'אירוע'}</span>}
                     {b.type === 'plan' && <span className="block-tag">{b.isDone ? 'בוצע ✓' : 'מתוכנן'}</span>}
                     <h3 className="block-name">{b.name}</h3>
                     <p className="block-time">

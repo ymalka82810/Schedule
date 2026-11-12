@@ -126,3 +126,24 @@ describe('יעד בימים ובשעות מסוימים', () => {
     expect(p.sessions.every((s) => s.start >= 420 && s.end <= 600)).toBe(true)
   })
 })
+
+describe('מבחנים וחופשות', () => {
+  it('מבחן בעוד שבוע מגדיל את יעד התרגול ומקרב מפגשים למבחן', () => {
+    const g = goal({ id: 'p', name: 'תרגול פיזיקה', subject: 'פיזיקה', minHoursPerWeek: 2, maxHoursPerWeek: 2 })
+    const exam = { id: 'ex', date: '2026-11-19', start: 540, end: 720, title: 'מבחן', examSubject: 'פיזיקה' }
+    const p = planWeek({ ...initialData, goals: [g], events: [exam] }, WEEK)
+    expect(p.report[0].min).toBe(180)
+    expect(p.report[0].boost).toContain('19.11.2026')
+    expect(p.sessions.some((s) => s.reasons.some((r) => r.includes('לפני המבחן')))).toBe(true)
+    // שבוע אחרי המבחן: חוזר לרגיל
+    expect(planWeek({ ...initialData, goals: [g], events: [exam] }, new Date(2026, 10, 22)).report[0].min).toBe(120)
+  })
+
+  it('בחופשה אין שיעורים, אבל אפשר לתכנן', () => {
+    const data: ScheduleData = { ...initialData, breaks: [{ id: 'b', title: 'חופשת חנוכה', from: '2026-11-15', to: '2026-11-17' }] }
+    const busy = busyForWeek(data, WEEK)
+    expect(busy.some((b) => b.day <= 2 && b.kind === 'lesson')).toBe(false)
+    expect(busy.some((b) => b.day === 3)).toBe(true)
+    expect(freeTime(data, WEEK)[0]).toEqual([{ start: 8 * 60, end: 23 * 60 }])
+  })
+})

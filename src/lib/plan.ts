@@ -50,6 +50,8 @@ export interface GoalReport {
   done: Minutes
   min: Minutes
   max: Minutes
+  /** למה היעד גדל השבוע, אם גדל (מבחן קרוב) */
+  boost?: string
 }
 
 export interface WeekPlan {
@@ -64,9 +66,37 @@ interface Interval {
 
 const STEP = 15
 
-/** האם השיבוץ מבוטל בתאריך הזה: ביטול ידני, או חג (אין לימודים) */
+/** החופשה שהתאריך נופל בה, אם יש */
+export const breakOn = (data: ScheduleData, date: string) =>
+  (data.breaks ?? []).find((b) => b.from <= date && date <= b.to)
+
+/** האם השיבוץ מבוטל בתאריך הזה: ביטול ידני, חג או חופשה */
 export function isCancelled(data: ScheduleData, refId: string, date: string): boolean {
-  return isChag(date) || (data.cancellations ?? []).some((c) => c.refId === refId && c.date === date)
+  return (
+    isChag(date) ||
+    !!breakOn(data, date) ||
+    (data.cancellations ?? []).some((c) => c.refId === refId && c.date === date)
+  )
+}
+
+/** הפרש בימים בין שני תאריכים YYYY-MM-DD */
+export const dayDiff = (a: string, b: string) =>
+  Math.round(
+    (Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8)) -
+      Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8))) /
+      864e5,
+  )
+
+/** מבחנים במקצוע מהשבוע הזה ועד שבועיים קדימה */
+function upcomingExams(data: ScheduleData, subject: string, weekStart: Date) {
+  const first = dateOfDay(weekStart, 0)
+  return data.events
+    .filter((e) => e.examSubject && sameName(e.examSubject, subject))
+    .filter((e) => {
+      const d = dayDiff(first, e.date)
+      return d >= 0 && d <= 13
+    })
+    .sort((a, b) => a.date.localeCompare(b.date))
 }
 
 /** האם השיעור בתוקף בתאריך (סמסטר א' בלבד וכד') */
@@ -163,6 +193,19 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
     sessions.filter((x) => x.goalId === goalId).reduce((m, x) => m + x.end - x.start, 0)
   const dayLoad = (day: DayIndex) => sessions.filter((x) => x.day === day).reduce((m, x) => m + x.end - x.start, 0)
 
+  // מבחן קרוב במקצוע: היעד גדל פי 1.5 (מעוגל לחצי שעה)
+  const boosts = new Map<string, { factor: number; note: string; exams: { date: string }[] }>()
+  for (const g of goals) {
+    if (!g.subject) continue
+    const exams = upcomingExams(data, g.subject, weekStart)
+    if (!exams.length) continue
+    const [y, m, d] = exams[0].date.split('-')
+    boosts.set(g.id, { factor: 1.5, note: `לקראת המבחן ב-${Number(d)}.${Number(m)}.${y}`, exams })
+  }
+  const minOf = (g: Goal) => Math.round(g.minHoursPerWeek * (boosts.get(g.id)?.factor ?? 1) * 2) / 2
+  const maxOf = (g: Goal) =>
+    Math.max(minOf(g), Math.round(g.maxHoursPerWeek * (boosts.get(g.id)?.factor ?? 1) * 2) / 2)
+
   const lengthOf = (g: Goal, target: Minutes) => {
     const len = g.sessionMinutes ?? 60
     const left = target - minutesOf(g.id)
@@ -216,6 +259,20 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
         reasons.push(`הכנה לשיעור ${sub} מחר (${DAY_NAMES[(day + 1) % 7]})`)
       }
       // יום בלי שיעור במקצוע ובלי שיעור מחר: עדיין אפשרי, אבל פחות שימושי
+    }
+
+    // מבחן קרוב: ככל שקרוב יותר למבחן (יום עד שלושה לפני), עדיף
+    const boost = boosts.get(g.id)
+    if (boost) {
+      const date = dateOfDay(weekStart, day)
+      for (const ex of boost.exams) {
+        const left = dayDiff(date, ex.date)
+        if (left >= 1 && left <= 3) {
+          sc += 5 - left
+          reasons.push(left === 1 ? 'יום לפני המבחן' : `${left} ימים לפני המבחן`)
+          break
+        }
+      }
     }
 
     // פיזור: עדיף יום שעוד אין בו מפגש של היעד הזה, וגם לא ביום שאחרי מפגש קודם
@@ -276,9 +333,9 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
       }
     }
   }
-  fill((g) => g.minHoursPerWeek * 60, -Infinity)
+  fill((g) => minOf(g) * 60, -Infinity)
   // שלב 2: עד המקסימום, רק במקומות שבאמת מתאימים
-  fill((g) => Math.max(g.minHoursPerWeek, g.maxHoursPerWeek) * 60, 3)
+  fill((g) => maxOf(g) * 60, 3)
 
   sessions.sort((a, b) => a.day - b.day || a.start - b.start)
   return {
@@ -288,8 +345,9 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
       name: g.name,
       planned: minutesOf(g.id),
       done: sessions.filter((x) => x.goalId === g.id && x.done).reduce((m, x) => m + x.end - x.start, 0),
-      min: g.minHoursPerWeek * 60,
-      max: g.maxHoursPerWeek * 60,
+      min: minOf(g) * 60,
+      max: maxOf(g) * 60,
+      boost: boosts.get(g.id)?.note,
     })),
   }
 }

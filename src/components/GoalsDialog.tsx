@@ -94,6 +94,7 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                       : ''}
                   </span>
                 </button>
+                {r?.boost && <p className="whoami-auto">{r.boost}: התרגול השבוע גדל פי 1.5.</p>}
                 {short && (
                   <p className="import-error">
                     חסרות {hours(r.min - r.planned)} שעות: אין מספיק זמן פנוי מתאים. אפשר להקטין את היעד, לקצר מפגשים או

@@ -1,4 +1,5 @@
 import type {
+  Break,
   ChoiceGroup,
   ColorKey,
   FixedEntry,
@@ -192,6 +193,15 @@ export function toggleDone(
   return { ...data, log: [...log, { id, goalId: session.goalId, date, start: session.start, end: session.end }] }
 }
 
+export function saveBreak(data: ScheduleData, b: Omit<Break, 'id'>): ScheduleData {
+  const list = data.breaks ?? []
+  return { ...data, breaks: [...list, { ...b, id: newId('br', list.map((x) => x.id)) }] }
+}
+
+export function removeBreak(data: ScheduleData, id: string): ScheduleData {
+  return { ...data, breaks: (data.breaks ?? []).filter((b) => b.id !== id) }
+}
+
 // ---------- יעדים ----------
 
 export function saveGoal(data: ScheduleData, goal: Omit<Goal, 'id'> & { id?: string }): ScheduleData {
@@ -300,6 +310,7 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     ...(Array.isArray(data.cancellations) ? { cancellations: data.cancellations as ScheduleData['cancellations'] } : {}),
     ...(isObj(data.plan) ? { plan: data.plan as unknown as ScheduleData['plan'] } : {}),
     ...(Array.isArray(data.log) ? { log: data.log as ScheduleData['log'] } : {}),
+    ...(Array.isArray(data.breaks) ? { breaks: data.breaks as ScheduleData['breaks'] } : {}),
     settings: data.settings as unknown as ScheduleData['settings'],
   }
   if (isObj(data.source)) full.source = data.source as unknown as ScheduleData['source']

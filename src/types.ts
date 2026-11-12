@@ -135,6 +135,17 @@ export interface OneOffEvent {
   start: Minutes
   end: Minutes
   title: string
+  /** מבחן במקצוע הזה: התכנון מגביר את התרגול לפניו */
+  examSubject?: string
+}
+
+/** חופשה של המוסד: אין לימודים בין התאריכים (כולל) */
+export interface Break {
+  id: string
+  title: string
+  /** YYYY-MM-DD */
+  from: string
+  to: string
 }
 
 export interface Settings {
@@ -158,6 +169,8 @@ export interface ScheduleData {
   events: OneOffEvent[]
   /** ביטולים של שיבוצים בשבוע מסוים */
   cancellations?: Cancellation[]
+  /** חופשות: אין שיעורים, אבל מתכננים כרגיל */
+  breaks?: Break[]
   /** מפגשי תרגול שסומנו כבוצעו */
   log?: PracticeLog[]
   settings: Settings

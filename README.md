@@ -16,6 +16,8 @@
 
 הרעיונות להמשך, ובמיוחד קריאת מערכת מקובץ PDF: [WISHLIST.md](WISHLIST.md)
 
+התחברות עם Google רק למייל אחד, על שרת Convex: [SETUP-AUTH.md](SETUP-AUTH.md)
+
 ## הרצה מקומית
 
 ```bash
@@ -31,6 +33,8 @@ npm run dev
 - `src/components/WeekGrid.tsx` – הלוח השבועי
 - `src/lib/pdf/` – קריאת קובץ PDF: `raw.ts` (מילים וקווים מהעמוד), `grid.ts` (טבלה ותאים ממוזגים), `parseCell.ts` ו-`parseSchedule.ts` (פענוח), `toSchedule.ts` (טיוטה למערכת)
 - `src/components/ImportDialog.tsx` – מסך הייבוא: בחירת קובץ, טיוטה על הלוח ועריכה
+- `convex/` – שרת Convex: התחברות עם Google ובדיקת המייל המורשה
+- `src/auth/AuthRoot.tsx` – מסך הכניסה והגנה על האתר
 - `src/index.css` – עיצוב וערכות הצבעים
 
 כל דחיפה ל-`main` בונה ומפרסמת את האתר ל-GitHub Pages.

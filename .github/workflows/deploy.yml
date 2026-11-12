@@ -25,6 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # כתובת שרת Convex (ציבורית, לא סוד). מוגדרת ב-Settings > Variables של הריפו
+          VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

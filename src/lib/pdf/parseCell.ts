@@ -7,7 +7,37 @@ export interface Teacher {
   /** שם המקצוע בלי יחידות לימוד: "מתמטיקה", "פיזיקה", "אנגלית" */
   subject: string
   room?: string
+  /** רמה או פירוט מהטבלה: "5 יח'", "טרום בסיס א" */
+  detail?: string
+  /** כותרת הפרק בטבלה, כשהיא אומרת משהו על הקורס: "קורס סמסטר א' בלבד" */
+  note?: string
 }
+
+/** מילים בלי אותיות שימוש בתחילתן, לצורך השוואה גמישה */
+const roots = (s: string) =>
+  normalizeSubject(s)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => (w.length > 3 ? w.replace(/^[והלב]/, '') : w))
+
+/**
+ * האם שני שמות מקצוע הם אותו מקצוע. מקבל כתיב שונה וניסוח קצת שונה:
+ * "מבוא למחשבים" = "מבוא למדעי המחשב", "פיסיקה" = "פיזיקה".
+ */
+export function sameSubject(a: string, b: string): boolean {
+  const na = normalizeSubject(a)
+  const nb = normalizeSubject(b)
+  if (na === nb) return true
+  const ra = roots(na)
+  const rb = roots(nb)
+  if (!ra.length || !rb.length || ra[0] !== rb[0]) return false
+  if (ra.length === 1 || rb.length === 1) return false
+  // מילה ראשונה זהה, ועוד מילה שאחת מתחילה בשנייה (מחשבים / מחשב)
+  return ra.slice(1).some((x) => rb.slice(1).some((y) => x.startsWith(y) || y.startsWith(x)))
+}
+
+/** המרצים בטבלה שמלמדים את המקצוע */
+export const teachersOf = (subject: string, all: Teacher[]) => all.filter((t) => sameSubject(t.subject, subject))
 
 /** שורה אחת של טקסט בתוך תא, בסדר קריאה מימין לשמאל */
 interface Line {
@@ -128,7 +158,7 @@ function findTeachers(text: string, teachers: Teacher[]): { rest: string; found:
 export function roomFor(teacher: Teacher | undefined, subject: string, all: Teacher[]): string | undefined {
   if (!teacher) return undefined
   const mine = all.filter((t) => t.fullName === teacher.fullName)
-  const match = mine.find((t) => t.subject === normalizeSubject(subject)) ?? (mine.length === 1 ? mine[0] : undefined)
+  const match = mine.find((t) => sameSubject(t.subject, subject)) ?? (mine.length === 1 ? mine[0] : undefined)
   return match?.room
 }
 

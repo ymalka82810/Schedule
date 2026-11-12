@@ -9,25 +9,34 @@ import {
   type Selection,
 } from '../lib/pdf/whoami'
 import { DAY_NAMES, formatTime } from '../lib/time'
+import type { Teacher } from '../lib/pdf/parseCell'
 
 interface Props {
   /** הטיוטה המלאה, כפי שנקראה מהקובץ */
   items: DraftItem[]
   selection: Selection
+  /** טבלת המרצים מהקובץ */
+  teachers: Teacher[]
   onChange: (sel: Selection) => void
 }
 
 /** אשף "מי אני": אילו מקצועות אני לומד, ובאיזו קבוצה או אצל איזה מרצה */
-export function WhoAmI({ items, selection, onChange }: Props) {
-  const subjects = useMemo(() => collectSubjects(items), [items])
-  const result = useMemo(() => applySelection(items, selection), [items, selection])
+export function WhoAmI({ items, selection, teachers, onChange }: Props) {
+  const subjects = useMemo(() => collectSubjects(items, teachers), [items, teachers])
+  const result = useMemo(() => applySelection(items, selection, teachers), [items, selection, teachers])
   const conflicts = useMemo(() => findConflicts(result), [result])
   const openChoices = result.filter((i) => i.options.length > 1).length
 
+  // שינוי ידני מבטל את הסימון "נבחר אוטומטית" של אותו מקצוע
+  const withoutAuto = (name: string) => {
+    const auto = { ...selection.auto }
+    delete auto[name]
+    return auto
+  }
   const setSubject = (name: string, on: boolean) =>
     onChange({ ...selection, subjects: { ...selection.subjects, [name]: on } })
   const setVariant = (name: string, key: string | null) =>
-    onChange({ ...selection, variants: { ...selection.variants, [name]: key } })
+    onChange({ ...selection, variants: { ...selection.variants, [name]: key }, auto: withoutAuto(name) })
 
   const withVariants = subjects.filter((s) => s.variants.length && selection.subjects[s.name] !== false)
 
@@ -55,13 +64,15 @@ export function WhoAmI({ items, selection, onChange }: Props) {
       </fieldset>
 
       {withVariants.map((s) => {
-        const clashes = variantClashes(items, selection, s)
+        const clashes = variantClashes(items, selection, s, teachers)
+        const auto = selection.auto?.[s.name]
         const chosen = selection.variants[s.name] ?? null
         return (
           <fieldset key={s.name} className="whoami-set">
             <legend>
               {s.name}: {s.by === 'group' ? 'באיזו קבוצה אני?' : 'אצל מי אני לומד?'}
             </legend>
+            {auto && <p className="whoami-auto">{auto}</p>}
             {s.variants.map((v) => {
               const clash = clashes.get(v.key)
               return (

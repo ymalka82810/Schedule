@@ -181,6 +181,7 @@ export function LessonDialog({ data, mode, onSave, onClose }: Props) {
                   </div>
                 </fieldset>
               )}
+              {lesson?.note && <p className="whoami-auto">{lesson.note}</p>}
               {usesOfLesson > 1 && (
                 <p className="muted">
                   השם, המרצה, החדר והצבע ישתנו בכל {usesOfLesson} השיבוצים של השיעור. היום והשעה רק כאן.

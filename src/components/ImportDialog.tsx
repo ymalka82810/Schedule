@@ -5,6 +5,7 @@ import { buildBlocks, visibleRange } from '../lib/layout'
 import { DAYS, DAY_NAMES, formatTime, fromTimeInput as fromInput, startOfWeek, toTimeInput as toInput } from '../lib/time'
 import type { DraftItem, DraftOption, DraftSchedule } from '../lib/pdf/draft'
 import { readSchedulePdf } from '../lib/pdf/extract'
+import { dateFromFileName } from '../lib/pdf/parseSchedule'
 import { fromBackup, toBackup } from '../lib/edit'
 import { diffSchedules, hasImported, type Change } from '../lib/diff'
 import { draftToData, validateDraft } from '../lib/pdf/toSchedule'
@@ -107,7 +108,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   const firstDayOf = (items: DraftItem[]) => items.reduce<number>((d, i) => Math.min(d, i.day), 6) as DayIndex
 
   const finishWizard = (fileName: string, sel: Selection | null) => {
-    const items = sel ? applySelection(fullItems, sel) : fullItems
+    const items = applySelection(fullItems, sel ?? { subjects: {}, variants: {} }, draft.teachers)
     setDraft((d) => ({ ...d, items }))
     setEdited(false)
     if (items.length) setSelectedDay(firstDayOf(items))
@@ -132,12 +133,13 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
         })
         return
       }
-      setDraft(result)
+      setDraft({ ...result, versionDate: result.versionDate ?? dateFromFileName(file.name) })
       setFullItems(result.items)
       setEdited(false)
       setSelectedDay(firstDayOf(result.items))
-      if (needsWizard(result.items)) {
-        setSelection(initialSelection(collectSubjects(result.items), current))
+      if (needsWizard(result.items, result.teachers)) {
+        const subjects = collectSubjects(result.items, result.teachers)
+        setSelection(initialSelection(subjects, current, result.items, result.teachers))
         setStep({ name: 'whoami', fileName: file.name })
       } else {
         setStep({ name: 'review', fileName: file.name })
@@ -288,7 +290,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
             </div>
           )}
 
-          {step.name === 'whoami' && <WhoAmI items={fullItems} selection={selection} onChange={setSelection} />}
+          {step.name === 'whoami' && <WhoAmI items={fullItems} selection={selection} teachers={draft.teachers ?? []} onChange={setSelection} />}
 
           {step.name === 'review' && (
             <>
@@ -406,7 +408,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
               <button type="button" className="btn btn-primary" disabled={problems.length > 0} onClick={save}>
                 שמירה כמערכת שלי
               </button>
-              {needsWizard(fullItems) && (
+              {needsWizard(fullItems, draft.teachers) && (
                 <button type="button" className="btn" onClick={() => backToWizard(step.fileName)}>
                   שינוי המקצועות והקבוצות שלי
                 </button>

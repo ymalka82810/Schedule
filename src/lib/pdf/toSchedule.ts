@@ -49,6 +49,7 @@ export function draftToData(items: DraftItem[], base: ScheduleData, source?: Sou
       teacher: o.teacher || undefined,
       room: o.room || undefined,
       group: o.group || undefined,
+      note: o.note || undefined,
       color: colors.get(o.name)!,
     })
     lessonIds.set(key, id)

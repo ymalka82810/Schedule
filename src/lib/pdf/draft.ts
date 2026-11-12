@@ -1,4 +1,5 @@
 import type { DayIndex, Minutes } from '../../types'
+import type { Teacher } from './parseCell'
 
 /** אפשרות אחת בתוך שיבוץ: מקצוע, ואם יש, מרצה וקבוצה */
 export interface DraftOption {
@@ -7,6 +8,8 @@ export interface DraftOption {
   /** "קבוצה 1", "קבוצה 3" */
   group?: string
   room?: string
+  /** הערה על הקורס, למשל "קורס סמסטר א' בלבד" */
+  note?: string
 }
 
 /**
@@ -32,4 +35,6 @@ export interface DraftSchedule {
   title?: string
   /** התאריך שכתוב בקובץ, למשל "18.10.2026" ב"מעודכנת נכון לתאריך" */
   versionDate?: string
+  /** טבלת המרצים מהקובץ, אם נמצאה: להשלמת מרצה וחדר */
+  teachers?: Teacher[]
 }

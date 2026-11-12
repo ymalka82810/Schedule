@@ -27,6 +27,8 @@ function cellText(cell: Cell): string {
 
 // ---------- עמוד מרצים ----------
 
+const HEADER_WORDS = /^(מקצוע|כיתה|חדר|מרצה|צוות)/
+
 export function parseTeachers(table: Table): Teacher[] {
   const out: Teacher[] = []
   const byRow = new Map<number, Cell[]>()
@@ -34,15 +36,37 @@ export function parseTeachers(table: Table): Teacher[] {
     if (cell.r1 !== cell.r2 || !cell.words.length) continue
     byRow.set(cell.r1, [...(byRow.get(cell.r1) ?? []), cell])
   }
-  for (const cells of byRow.values()) {
-    // מימין לשמאל: מרצה | מקצוע | כיתה
+  let section: string | undefined
+  for (const r of [...byRow.keys()].sort((a, b) => a - b)) {
+    const cells = byRow.get(r)!
+    // שורה עם תא אחד בלבד היא כותרת פרק ("מתמטיקה", "קורס סמסטר א' בלבד")
+    if (cells.length === 1) {
+      section = cellText(cells[0])
+      continue
+    }
+    // מימין לשמאל: מרצה | מקצוע | כיתה (הכיתה יכולה לחסור)
     const ordered = [...cells].sort((a, b) => b.c1 - a.c1).map(cellText)
-    if (ordered.length < 3) continue
-    const [fullName, subjectRaw, room] = ordered
-    if (!/\d/.test(room)) continue
+    if (ordered.length < 2) continue
+    const [fullName, subjectRaw, room = ''] = ordered
+    if (ordered.some((t) => HEADER_WORDS.test(t))) continue
+    if (room && !/\d/.test(room)) continue
     const subject = normalizeSubject(subjectRaw.split(/\d|[-–]/)[0])
-    if (!fullName || !subject) continue
-    out.push({ fullName, subject, room })
+    if (!fullName || !subject || /\d/.test(fullName)) continue
+    // הפירוט = מה שנשאר אחרי מילות המקצוע: "5 יח", "טרום בסיס א"
+    const tokens = subjectRaw.replace(/^[^\u05d0-\u05ea\d]+/, '').split(/\s+/)
+    const detail = tokens
+      .slice(subject.split(' ').length)
+      .join(' ')
+      .replace(/^[\s\-–']+|[\s\-–]+$/g, '')
+      .trim()
+    const note = section && /סמסטר|בלבד|שבועיים/.test(section) ? section : undefined
+    out.push({
+      fullName,
+      subject,
+      room: room || undefined,
+      detail: detail ? (/^\d+\s*יח$/.test(detail) ? `${detail}'` : detail) : undefined,
+      note,
+    })
   }
   return out
 }
@@ -175,6 +199,12 @@ function parseTimetable(table: Table, tt: Timetable, teachers: Teacher[], warnin
   return merged
 }
 
+/** תאריך בשם הקובץ: "מעודכנת_נכון_לתאריך_18_10_2026.pdf" */
+export function dateFromFileName(name: string): string | undefined {
+  const m = /(?<!\d)(\d{1,2})[._\- ](\d{1,2})[._\- ](\d{4})(?!\d)/.exec(name)
+  return m ? `${Number(m[1])}.${Number(m[2])}.${m[3]}` : undefined
+}
+
 const DATE = /(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4})(?!\d)/
 
 /**
@@ -221,5 +251,5 @@ export function parsePages(pages: RawPage[]): DraftSchedule {
   if (!found) warnings.push('לא מצאתי בקובץ טבלת מערכת שעות. אולי הקובץ סרוק או בנוי אחרת.')
   else if (!teachers.length) warnings.push('לא מצאתי טבלת מרצים, ולכן לא הושלמו חדרים ושמות מלאים.')
 
-  return { items, warnings, versionDate: findVersionDate(pages) }
+  return { items, warnings, teachers, versionDate: findVersionDate(pages) }
 }

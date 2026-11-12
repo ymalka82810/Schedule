@@ -1,6 +1,7 @@
 import type { DayIndex, Minutes, ScheduleData } from '../../types'
 import type { DraftItem, DraftOption } from './draft'
 import { DAY_NAMES, formatTime } from '../time'
+import { teachersOf, type Teacher } from './parseCell'
 
 /**
  * אשף "מי אני": אחרי הקריאה, הטיוטה מכילה את כל הקבוצות של כל המקצועות.
@@ -21,6 +22,8 @@ export interface Subject {
   by: 'group' | 'teacher'
   /** ריק אם אין מה לבחור (קבוצה אחת או בלי פירוט) */
   variants: Variant[]
+  /** המרצים של המקצוע מטבלת המרצים */
+  staff: Teacher[]
 }
 
 export interface Selection {
@@ -28,6 +31,8 @@ export interface Selection {
   subjects: Record<string, boolean>
   /** מקצוע → המפתח של הקבוצה/המרצה שלי, או null = עוד לא יודע, להשאיר הכול לבחירה */
   variants: Record<string, string | null>
+  /** מקצועות שהבחירה בהם נעשתה אוטומטית, עם ההסבר */
+  auto?: Record<string, string>
 }
 
 export interface Conflict {
@@ -44,8 +49,17 @@ function variantKey(o: DraftOption, by: Subject['by']): string {
   return (by === 'group' ? o.group : o.teacher)?.trim() ?? ''
 }
 
-/** אוסף את המקצועות שבטיוטה, ולכל אחד את הקבוצות או המרצים שלו */
-export function collectSubjects(items: DraftItem[]): Subject[] {
+const staffLabel = (t: Teacher) => {
+  const extra = [t.detail, t.room].filter(Boolean).join(', ')
+  return extra ? `${t.fullName} (${extra})` : t.fullName
+}
+
+/**
+ * אוסף את המקצועות שבטיוטה, ולכל אחד את הקבוצות או המרצים שלו.
+ * מרצים מטבלת המרצים נכנסים גם אם הם לא כתובים באף תא, כי תא שכתוב בו רק "פיזיקה"
+ * הוא שיעור של כל המרצים, וצריך לדעת אצל מי אני.
+ */
+export function collectSubjects(items: DraftItem[], teachers: Teacher[] = []): Subject[] {
   const options = new Map<string, DraftOption[]>()
   const counts = new Map<string, number>()
   for (const item of items) {
@@ -61,30 +75,43 @@ export function collectSubjects(items: DraftItem[]): Subject[] {
 
   const subjects: Subject[] = []
   for (const [name, opts] of options) {
-    // אם יש למקצוע קבוצות ממוספרות, הן ההבחנה (אותו מרצה יכול ללמד כמה קבוצות). אחרת לפי מרצה
-    const by: Subject['by'] = opts.some((o) => o.group?.trim()) ? 'group' : 'teacher'
-    const teachersOf = new Map<string, Set<string>>()
-    for (const o of opts) {
-      const key = variantKey(o, by)
-      if (!key) continue
-      const set = teachersOf.get(key) ?? new Set<string>()
-      if (by === 'group' && o.teacher?.trim()) set.add(o.teacher.trim())
-      teachersOf.set(key, set)
+    const staff = teachersOf(name, teachers)
+    // קבוצות ממוספרות הן ההבחנה רק כשיש לפחות שתיים. "קבוצה 1" בודדת היא רעש בטבלה
+    const groups = new Set(opts.map((o) => o.group?.trim()).filter(Boolean))
+    const by: Subject['by'] = groups.size > 1 ? 'group' : 'teacher'
+
+    let variants: Variant[]
+    if (by === 'group') {
+      const teachersOfGroup = new Map<string, Set<string>>()
+      for (const o of opts) {
+        const key = variantKey(o, by)
+        if (!key) continue
+        const set = teachersOfGroup.get(key) ?? new Set<string>()
+        if (o.teacher?.trim()) set.add(o.teacher.trim())
+        teachersOfGroup.set(key, set)
+      }
+      if (staff.length === 1) for (const set of teachersOfGroup.values()) set.add(staff[0].fullName)
+      variants = [...teachersOfGroup.entries()]
+        .sort(([x], [y]) => x.localeCompare(y, 'he', { numeric: true }))
+        .map(([key, ts]) => ({ key, label: ts.size ? `${key} (${[...ts].join(', ')})` : key }))
+    } else {
+      const keys = new Set(opts.map((o) => variantKey(o, by)).filter(Boolean))
+      for (const t of staff) keys.add(t.fullName)
+      variants = [...keys]
+        .sort((x, y) => x.localeCompare(y, 'he'))
+        .map((key) => {
+          const t = staff.find((s) => s.fullName === key)
+          return { key, label: t ? staffLabel(t) : key }
+        })
     }
-    const variants: Variant[] = [...teachersOf.entries()]
-      .sort(([a], [b]) => a.localeCompare(b, 'he', { numeric: true }))
-      .map(([key, teachers]) => ({
-        key,
-        label: teachers.size ? `${key} (${[...teachers].join(', ')})` : key,
-      }))
-    subjects.push({ name, count: counts.get(name) ?? 0, by, variants: variants.length > 1 ? variants : [] })
+    subjects.push({ name, count: counts.get(name) ?? 0, by, variants: variants.length > 1 ? variants : [], staff })
   }
   return subjects.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'he'))
 }
 
 /** האם יש בכלל מה לשאול: מקצוע עם כמה קבוצות, או שיבוץ עם כמה מקצועות במקביל (מגמות) */
-export function needsWizard(items: DraftItem[]): boolean {
-  if (collectSubjects(items).some((s) => s.variants.length)) return true
+export function needsWizard(items: DraftItem[], teachers: Teacher[] = []): boolean {
+  if (collectSubjects(items, teachers).some((s) => s.variants.length)) return true
   return items.some((i) => new Set(i.options.map(subjectName)).size > 1)
 }
 
@@ -92,7 +119,12 @@ export function needsWizard(items: DraftItem[]): boolean {
  * בחירה התחלתית. אם כבר יש מערכת שמורה, מנחשים ממנה: מקצועות שכבר יש לי,
  * והמרצה או הקבוצה שכבר יש לי בכל מקצוע. בלי מערכת שמורה: כל המקצועות, בלי בחירת קבוצה.
  */
-export function initialSelection(subjects: Subject[], current?: ScheduleData): Selection {
+export function initialSelection(
+  subjects: Subject[],
+  current?: ScheduleData,
+  items?: DraftItem[],
+  teachers: Teacher[] = [],
+): Selection {
   const mine = (current?.lessons ?? []).filter((l) => !l.personal)
   const known = new Set(mine.map((l) => l.name.trim()))
   const anyKnown = subjects.some((s) => known.has(s.name))
@@ -112,10 +144,42 @@ export function initialSelection(subjects: Subject[], current?: ScheduleData): S
     }
     sel.variants[s.name] = chosen
   }
-  return sel
+  return items ? autoChoose(items, sel, subjects, teachers) : sel
 }
 
-const subjectsOf = (items: DraftItem[]) => new Map(collectSubjects(items).map((s) => [s.name, s]))
+/**
+ * בחירה אוטומטית: מקצוע שעוד לא נבחרה בו קבוצה, ורק אחת מהאפשרויות שלו לא מתנגשת
+ * עם שאר המערכת. חוזר על זה עד שאין שינוי, כי בחירה אחת יכולה לפתור את הבאה.
+ */
+export function autoChoose(items: DraftItem[], sel: Selection, subjects: Subject[], teachers: Teacher[] = []): Selection {
+  let next: Selection = { ...sel, variants: { ...sel.variants }, auto: { ...sel.auto } }
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false
+    for (const s of subjects) {
+      if (!s.variants.length || next.subjects[s.name] === false || next.variants[s.name] != null) continue
+      // רק אפשרויות שבאמת מופיעות בתאים: מרצה מהטבלה שלא כתוב בשום תא לא מוכיח כלום
+      const present = s.variants.filter((v) =>
+        items.some((i) => i.options.some((o) => subjectName(o) === s.name && variantKey(o, s.by) === v.key)),
+      )
+      if (present.length < 2) continue
+      const clashes = variantClashes(items, next, s, teachers)
+      const free = present.filter((v) => !clashes.has(v.key))
+      if (free.length !== 1) continue
+      const clashed = present.filter((v) => clashes.has(v.key)).map((v) => v.key)
+      next = {
+        ...next,
+        variants: { ...next.variants, [s.name]: free[0].key },
+        auto: { ...next.auto, [s.name]: `נבחרה אוטומטית: רק היא לא מתנגשת (${clashed.join(', ')} מתנגשות)` },
+      }
+      changed = true
+    }
+    if (!changed) break
+  }
+  return next
+}
+
+const subjectsOf = (items: DraftItem[], teachers: Teacher[]) =>
+  new Map(collectSubjects(items, teachers).map((s) => [s.name, s]))
 
 function keeps(o: DraftOption, sel: Selection, subjects: Map<string, Subject>): boolean {
   const name = subjectName(o)
@@ -131,12 +195,36 @@ function keeps(o: DraftOption, sel: Selection, subjects: Map<string, Subject>): 
 const optionKey = (o: DraftOption) => `${o.name}|${o.teacher ?? ''}|${o.group ?? ''}|${o.room ?? ''}`
 const signature = (opts: DraftOption[]) => opts.map(optionKey).sort().join('#')
 
-/** מסנן את הטיוטה לפי הבחירה, ומאחד מחדש שיבוצים רצופים שהפכו זהים */
-export function applySelection(items: DraftItem[], sel: Selection): DraftItem[] {
-  const subjects = subjectsOf(items)
+/**
+ * משלים מרצה, חדר והערה לשיעור שכתוב בו רק שם המקצוע:
+ * לפי המרצה שבחרתי במקצוע, או לפי המרצה היחיד שמלמד אותו בטבלה.
+ */
+function complete(o: DraftOption, sel: Selection, subject: Subject | undefined): DraftOption {
+  if (!subject) return o
+  const out = { ...o }
+  if (!out.teacher) {
+    const chosen = subject.by === 'teacher' ? sel.variants[subject.name] : null
+    if (chosen) out.teacher = chosen
+    else if (subject.staff.length === 1) out.teacher = subject.staff[0].fullName
+  }
+  const t = subject.staff.find((s) => s.fullName === out.teacher)
+  if (!out.room && t?.room) out.room = t.room
+  const note = subject.staff.find((s) => s.note)?.note
+  if (!out.note && note) out.note = note
+  return out
+}
+
+/**
+ * מסנן את הטיוטה לפי הבחירה, משלים מרצים וחדרים מטבלת המרצים,
+ * ומאחד מחדש שיבוצים רצופים שהפכו זהים.
+ */
+export function applySelection(items: DraftItem[], sel: Selection, teachers: Teacher[] = []): DraftItem[] {
+  const subjects = subjectsOf(items, teachers)
   const filtered: DraftItem[] = []
   for (const item of items) {
-    const options = item.options.filter((o) => keeps(o, sel, subjects))
+    const options = item.options
+      .filter((o) => keeps(o, sel, subjects))
+      .map((o) => complete(o, sel, subjects.get(subjectName(o))))
     if (options.length) filtered.push({ ...item, options })
   }
 
@@ -195,9 +283,14 @@ export function findConflicts(items: DraftItem[]): Conflict[] {
  * "תפוס" = שיבוצים שנשארו עם שיעור יחיד אחרי הסינון, בלי המקצוע הנבדק.
  * כך מגלים, למשל, שקבוצות 1 ו-2 של כתיבה מדעית מתנגשות עם האנגלית שלי.
  */
-export function variantClashes(items: DraftItem[], sel: Selection, subject: Subject): Map<string, Conflict> {
+export function variantClashes(
+  items: DraftItem[],
+  sel: Selection,
+  subject: Subject,
+  teachers: Teacher[] = [],
+): Map<string, Conflict> {
   const others: Selection = { ...sel, subjects: { ...sel.subjects, [subject.name]: false } }
-  const busy = applySelection(items, others).filter((i) => i.options.length === 1)
+  const busy = applySelection(items, others, teachers).filter((i) => i.options.length === 1)
   const out = new Map<string, Conflict>()
 
   for (const v of subject.variants) {

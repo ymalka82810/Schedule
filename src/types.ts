@@ -29,6 +29,8 @@ export interface Lesson {
   room?: string
   /** "קבוצה 1" וכד', כשיש כמה קבוצות לאותו מקצוע */
   group?: string
+  /** הערה על הקורס מהקובץ, למשל "קורס סמסטר א' בלבד" */
+  note?: string
   /** שיעור אישי שלא מגיע מקובץ המערכת (למשל מיגו). ייבוא מקובץ לא מוחק אותו */
   personal?: boolean
   color: ColorKey

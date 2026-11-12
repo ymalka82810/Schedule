@@ -3,7 +3,9 @@ import type { ColorKey, DayIndex, ScheduleData, Slot } from '../types'
 import {
   COLORS,
   COLOR_NAMES,
-  addLesson,
+  addActivity,
+  setActivityDays,
+  siblings,
   chooseOption,
   moveChoice,
   moveEntry,
@@ -16,7 +18,8 @@ import {
   updatePractice,
   type BlockTarget,
 } from '../lib/edit'
-import { DAYS, DAY_NAMES, fromTimeInput, toTimeInput } from '../lib/time'
+import { DAYS, DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
+import { DayPicker } from './DayPicker'
 
 export type LessonTarget = Extract<BlockTarget, { kind: 'entry' | 'choice' | 'practice' }>
 export type LessonDialogMode = { kind: 'edit'; target: LessonTarget } | { kind: 'new'; day: DayIndex }
@@ -58,6 +61,16 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
   const [validFrom, setValidFrom] = useState(lesson?.validFrom ?? '')
   const [validUntil, setValidUntil] = useState(lesson?.validUntil ?? '')
   const [slot, setSlot] = useState<Slot>(initialSlot)
+  // פעילות בכמה ימים: ימים חדשים, או האחים של השיבוץ (אותו שיעור באותן שעות)
+  const group = target?.kind === 'entry' ? siblings(data, target.entry.id) : []
+  const [days, setDays] = useState<DayIndex[]>(
+    mode.kind === 'new' ? [mode.day] : group.map((e) => e.slot.day).sort((a, b) => a - b),
+  )
+  const [onlyThis, setOnlyThis] = useState(false)
+  const [perDay, setPerDay] = useState(false)
+  const [times, setTimes] = useState<Partial<Record<DayIndex, { start: number; end: number }>>>({})
+  const timeOf = (d: DayIndex) => times[d] ?? { start: slot.start, end: slot.end }
+  const multi = mode.kind === 'new' || (target?.kind === 'entry' && !onlyThis)
   const [chosen, setChosen] = useState<string | null>(target?.kind === 'choice' ? target.group.chosenLessonId : null)
   const [error, setError] = useState<string | null>(null)
 
@@ -71,7 +84,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
 
   const title =
     mode.kind === 'new'
-      ? 'הוספת שיעור'
+      ? 'שיעור או פעילות'
       : target?.kind === 'choice'
         ? 'משבצת בחירה'
         : target?.kind === 'practice'
@@ -80,15 +93,19 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    const problem = slotProblem(slot)
+    const problem = perDay && mode.kind === 'new'
+      ? days.map((d) => slotProblem({ day: d, ...timeOf(d) })).find(Boolean) ?? null
+      : slotProblem(slot)
     if (problem) return setError(problem)
+    if (multi && !days.length) return setError('צריך לבחור לפחות יום אחד.')
     const needsName = target?.kind !== 'choice'
     if (needsName && !name.trim()) return setError('צריך שם.')
     if (validFrom && validUntil && validUntil < validFrom) return setError('תאריך הסיום של התוקף לפני תאריך ההתחלה.')
 
     let next = data
     if (mode.kind === 'new') {
-      next = addLesson(data, { name, teacher, room, color, slot })
+      const slots = days.map((day) => ({ day, ...(perDay ? timeOf(day) : { start: slot.start, end: slot.end }) }))
+      next = addActivity(data, { name, teacher, room, color, slots })
     } else if (target?.kind === 'entry') {
       // שם, מרצה, חדר וצבע שייכים לשיעור ומשתנים בכל השיבוצים שלו. השעה רק בשיבוץ הזה
       next = updateLesson(data, target.lesson.id, {
@@ -99,7 +116,9 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
         validFrom: validFrom || undefined,
         validUntil: validUntil || undefined,
       })
-      next = moveEntry(next, target.entry.id, slot)
+      next = onlyThis
+        ? moveEntry(next, target.entry.id, slot)
+        : setActivityDays(next, target.entry.id, days, slot.start, slot.end)
     } else if (target?.kind === 'choice') {
       next = chooseOption(moveChoice(data, target.group.id, slot), target.group.id, chosen)
     } else if (target?.kind === 'practice') {
@@ -217,20 +236,39 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
             </>
           )}
 
-          <div className="edit-row">
-            <label className="field">
-              <span>יום</span>
-              <select
-                value={slot.day}
-                onChange={(e) => setSlot({ ...slot, day: Number(e.target.value) as DayIndex })}
-              >
-                {DAYS.map((d) => (
-                  <option key={d} value={d}>
-                    {DAY_NAMES[d]}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {multi && (
+            <>
+              <DayPicker
+                legend={mode.kind === 'new' ? 'באילו ימים' : 'בימים'}
+                value={days}
+                onChange={setDays}
+              />
+              {target?.kind === 'entry' && group.length > 1 && (
+                <p className="muted">השעה והימים משתנים בכל {group.length} הימים של הפעילות.</p>
+              )}
+            </>
+          )}
+
+          {!multi && (
+            <div className="edit-row">
+              <label className="field">
+                <span>יום</span>
+                <select
+                  value={slot.day}
+                  onChange={(e) => setSlot({ ...slot, day: Number(e.target.value) as DayIndex })}
+                >
+                  {DAYS.map((d) => (
+                    <option key={d} value={d}>
+                      {DAY_NAMES[d]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {!(perDay && mode.kind === 'new') && (
+            <div className="edit-row">
             <label className="field">
               <span>התחלה</span>
               <input
@@ -254,7 +292,60 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
                 }}
               />
             </label>
-          </div>
+                      </div>
+          )}
+
+          {mode.kind === 'new' && days.length > 1 && (
+            <label className="import-filter">
+              <input type="checkbox" checked={perDay} onChange={(e) => setPerDay(e.target.checked)} />
+              שעה שונה בכל יום
+            </label>
+          )}
+
+          {perDay &&
+            mode.kind === 'new' &&
+            days.map((d) => (
+              <div key={d} className="edit-row">
+                <span className="perday-name">{DAY_NAMES[d]}</span>
+                <label className="field">
+                  <span>התחלה</span>
+                  <input
+                    type="time"
+                    value={toTimeInput(timeOf(d).start)}
+                    onChange={(e) => {
+                      const m = fromTimeInput(e.target.value)
+                      if (m !== null) setTimes({ ...times, [d]: { ...timeOf(d), start: m } })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>סיום</span>
+                  <input
+                    type="time"
+                    value={toTimeInput(timeOf(d).end)}
+                    aria-invalid={timeOf(d).end <= timeOf(d).start}
+                    onChange={(e) => {
+                      const m = fromTimeInput(e.target.value)
+                      if (m !== null) setTimes({ ...times, [d]: { ...timeOf(d), end: m } })
+                    }}
+                  />
+                </label>
+              </div>
+            ))}
+
+          {target?.kind === 'entry' && group.length > 1 && (
+            <label className="import-filter">
+              <input
+                type="checkbox"
+                checked={onlyThis}
+                onChange={(e) => {
+                  setOnlyThis(e.target.checked)
+                  setSlot(target.entry.slot)
+                }}
+              />
+              לשנות רק את יום {DAY_NAMES[target.entry.slot.day]}, <bdi dir="ltr">{formatTime(target.entry.slot.start)}</bdi>
+            </label>
+          )}
 
           {error && (
             <p className="import-error" role="alert">

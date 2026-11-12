@@ -194,7 +194,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
             className="btn btn-primary"
             onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: selectedDay } })}
           >
-            ＋ שיעור
+            ＋ שיעור או פעילות
           </button>
 
           <button type="button" className="btn" onClick={() => setDialog({ kind: 'event', event: { date: newEventDate() } })}>

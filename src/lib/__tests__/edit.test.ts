@@ -104,3 +104,32 @@ describe('שבוע מסוים', () => {
     expect(buildBlocks(data, { weekStart: new Date(2026, 10, 22) }).some((b) => b.type === 'event')).toBe(false)
   })
 })
+
+describe('פעילות בכמה ימים', () => {
+  it('הוספה בכמה ימים יוצרת שיעור אחד עם שיבוץ בכל יום', async () => {
+    const { addActivity, siblings } = await import('../edit')
+    const slots = ([0, 2, 4] as const).map((day) => ({ day, start: 420, end: 480 }))
+    const data = addActivity(emptyData, { name: 'אימון', color: 'moss', slots })
+    expect(data.lessons).toHaveLength(1)
+    expect(data.entries.map((e) => e.slot.day)).toEqual([0, 2, 4])
+    expect(siblings(data, data.entries[0].id)).toHaveLength(3)
+  })
+
+  it('שינוי ימים ושעה: מוסיף, מוחק ומזיז את כל האחים יחד', async () => {
+    const { addActivity, setActivityDays } = await import('../edit')
+    const slots = ([0, 2] as const).map((day) => ({ day, start: 420, end: 480 }))
+    const data = addActivity(emptyData, { name: 'אימון', color: 'moss', slots })
+    const next = setActivityDays(data, data.entries[0].id, [2, 3], 450, 510)
+    expect(next.entries.map((e) => [e.slot.day, e.slot.start]).sort()).toEqual([
+      [2, 450],
+      [3, 450],
+    ])
+    expect(setActivityDays(data, data.entries[0].id, [], 0, 1).lessons).toHaveLength(0)
+  })
+
+  it('שיבוץ באותו שיעור בשעה אחרת לא נחשב אח', async () => {
+    const { siblings } = await import('../edit')
+    const mathSun = initialData.entries.find((e) => e.lessonId === 'math' && e.slot.day === 0)!
+    expect(siblings(initialData, mathSun.id).every((e) => e.slot.start === mathSun.slot.start)).toBe(true)
+  })
+})

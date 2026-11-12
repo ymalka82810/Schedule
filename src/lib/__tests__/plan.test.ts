@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { initialData } from '../../data/initial'
-import { busyForWeek, freeTime, planWeek } from '../plan'
+import { DEFAULT_PLAN, busyForWeek, freeTime, planWeek } from '../plan'
 import type { Goal, ScheduleData } from '../../types'
 
 // שבוע שמתחיל ביום ראשון 15.11.2026
@@ -115,5 +115,14 @@ describe('חגים ותרגול שבוצע', () => {
     const p = planWeek(data, WEEK)
     expect(p.sessions.find((s) => s.done)).toMatchObject({ day: 5, start: 540 })
     expect(p.report[0]).toMatchObject({ planned: 120, done: 60 })
+  })
+})
+
+describe('יעד בימים ובשעות מסוימים', () => {
+  it('אימון רק בבוקר, רק בראשון שלישי וחמישי', () => {
+    const g = goal({ id: 'gym', name: 'אימון', minHoursPerWeek: 3, maxHoursPerWeek: 3, days: [0, 2, 4], earliest: 7 * 60, latest: 10 * 60 })
+    const p = planWeek({ ...initialData, plan: { ...DEFAULT_PLAN, dayStart: 6 * 60 }, goals: [g] }, WEEK)
+    expect(p.sessions.map((s) => s.day)).toEqual([0, 2, 4])
+    expect(p.sessions.every((s) => s.start >= 420 && s.end <= 600)).toBe(true)
   })
 })

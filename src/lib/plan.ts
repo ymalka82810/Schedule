@@ -172,6 +172,9 @@ export function planWeek(data: ScheduleData, weekStart: Date): WeekPlan {
 
   const score = (g: Goal, day: DayIndex, start: Minutes, len: Minutes): Candidate | null => {
     const end = start + len
+    if (g.days?.length && !g.days.includes(day)) return null
+    if (g.earliest !== undefined && start < g.earliest) return null
+    if (g.latest !== undefined && end > g.latest) return null
     const today = sessions.filter((x) => x.day === day && x.goalId === g.id).length
     if (today >= (g.maxPerDay ?? 1)) return null
     if (dayLoad(day) + len > s.maxHoursPerDay * 60) return null

@@ -4,6 +4,7 @@ import { removeGoal, saveGoal, savePlanSettings } from '../lib/edit'
 import { planSettings, planWeek, subjectNames } from '../lib/plan'
 import { DAYS, DAY_NAMES, fromTimeInput, toTimeInput } from '../lib/time'
 import { Swatches } from './Swatches'
+import { DayPicker } from './DayPicker'
 import { useEscape } from './useEscape'
 
 interface Props {
@@ -175,6 +176,38 @@ export function GoalsDialog({ data, weekStart, onSave, onClose }: Props) {
                         </select>
                       </label>
                     </div>
+                    <DayPicker
+                      legend="רק בימים (בלי סימון: כל יום)"
+                      value={g.days ?? []}
+                      onChange={(days) => updateGoal(g, { days: days.length ? days : undefined })}
+                    />
+                    <label className="import-filter">
+                      <input
+                        type="checkbox"
+                        checked={g.earliest !== undefined || g.latest !== undefined}
+                        onChange={(e) =>
+                          updateGoal(
+                            g,
+                            e.target.checked
+                              ? { earliest: 7 * 60, latest: 12 * 60 }
+                              : { earliest: undefined, latest: undefined },
+                          )
+                        }
+                      />
+                      רק בשעות מסוימות
+                    </label>
+                    {(g.earliest !== undefined || g.latest !== undefined) && (
+                      <div className="edit-row">
+                        <label className="field">
+                          <span>לא לפני</span>
+                          {time(g.earliest ?? settings.dayStart, (m) => updateGoal(g, { earliest: m }))}
+                        </label>
+                        <label className="field">
+                          <span>לסיים עד</span>
+                          {time(g.latest ?? settings.dayEnd, (m) => updateGoal(g, { latest: m }))}
+                        </label>
+                      </div>
+                    )}
                     {(draft.practiceWindows ?? []).length > 0 && (
                       <label className="import-filter">
                         <input

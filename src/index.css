@@ -1353,3 +1353,9 @@ p {
 :root[data-theme='dark'] .toast .link-btn {
   color: var(--paper);
 }
+
+.perday-name {
+  align-self: center;
+  min-width: 3.5rem;
+  font-weight: 600;
+}

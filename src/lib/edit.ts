@@ -210,6 +210,56 @@ export function savePlanSettings(data: ScheduleData, plan: PlanSettings): Schedu
   return { ...data, plan }
 }
 
+// ---------- פעילות בכמה ימים ----------
+
+/** שיבוצים "אחים": אותו שיעור באותן שעות בימים אחרים. כך פעילות של כמה ימים נערכת כיחידה אחת */
+export function siblings(data: ScheduleData, entryId: string): FixedEntry[] {
+  const e = data.entries.find((x) => x.id === entryId)
+  if (!e) return []
+  return data.entries.filter(
+    (x) => x.lessonId === e.lessonId && x.slot.start === e.slot.start && x.slot.end === e.slot.end,
+  )
+}
+
+/** שיעור או פעילות חדשים בכמה ימים, באותן שעות (או בשעות שונות לכל יום) */
+export function addActivity(data: ScheduleData, input: Omit<NewLesson, 'slot'> & { slots: Slot[] }): ScheduleData {
+  let next = data
+  for (const slot of input.slots) next = addLesson(next, { ...input, slot })
+  return next
+}
+
+/**
+ * קובע באילו ימים ובאיזו שעה מתקיימת פעילות: כל השיבוצים האחים של entryId מתעדכנים,
+ * ימים שהוסרו נמחקים, ימים חדשים נוספים.
+ */
+export function setActivityDays(
+  data: ScheduleData,
+  entryId: string,
+  days: Slot['day'][],
+  start: number,
+  end: number,
+): ScheduleData {
+  const group = siblings(data, entryId)
+  if (!group.length) return data
+  const lessonId = group[0].lessonId
+  const wanted = new Set(days)
+  const kept = group.filter((e) => wanted.has(e.slot.day))
+  const removed = new Set(group.filter((e) => !wanted.has(e.slot.day)).map((e) => e.id))
+  const have = new Set(kept.map((e) => e.slot.day))
+
+  let entries = data.entries
+    .filter((e) => !removed.has(e.id))
+    .map((e) => (kept.includes(e) ? { ...e, slot: { ...e.slot, start, end } } : e))
+  const ids = [...entries.map((e) => e.id), ...data.choiceGroups.map((g) => g.id)]
+  for (const day of days) {
+    if (have.has(day)) continue
+    const id = newId('me', ids)
+    ids.push(id)
+    entries = [...entries, { id, lessonId, slot: { day, start, end } }]
+  }
+  return dropUnused({ ...data, entries })
+}
+
 /** בדיקה לפני שמירה של שיבוץ. מחזיר הודעה, או null אם תקין */
 export function slotProblem(slot: Slot): string | null {
   if (slot.end <= slot.start) return 'שעת הסיום חייבת להיות אחרי שעת ההתחלה.'

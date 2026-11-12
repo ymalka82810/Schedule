@@ -86,6 +86,11 @@ export interface Goal {
   preferPractice?: boolean
   /** כמה מפגשים לכל היותר ביום. ברירת מחדל 1 */
   maxPerDay?: number
+  /** רק בימים האלה. חסר או ריק = כל יום שמותר לתכנן בו */
+  days?: DayIndex[]
+  /** רק בין השעות האלה (למשל אימון רק בבוקר) */
+  earliest?: Minutes
+  latest?: Minutes
 }
 
 /** ביטול של שיבוץ קבוע בשבוע אחד (מרצה חולה, חופשה) */

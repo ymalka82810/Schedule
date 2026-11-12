@@ -220,6 +220,14 @@ export interface ScheduleData {
   settings: Settings
   /** הגדרות תכנון הזמן הפנוי. חסר = ברירת המחדל */
   plan?: PlanSettings
+  /**
+   * הבחירות שלי באשף "מי אני" (אילו מקצועות, ואיזו קבוצה או מרצה בכל אחד).
+   * נשמרות בנפרד מהמערכת, כדי שייבוא של גרסה חדשה, גם בסביבה אחרת, ידע מה שלי בלי לשאול שוב
+   */
+  wizard?: {
+    subjects: Record<string, boolean>
+    variants: Record<string, string | null>
+  }
   /** מאיזה קובץ נבנתה המערכת. חסר אם לא יובאה מקובץ */
   source?: {
     fileName: string

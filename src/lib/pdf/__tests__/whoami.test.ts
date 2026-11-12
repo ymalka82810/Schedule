@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applySelection, collectSubjects, findConflicts, initialSelection, needsWizard, variantClashes } from '../whoami'
+import { applySelection, collectSubjects, findConflicts, initialSelection, needsWizard, variantClashes, withWizard } from '../whoami'
+import { emptyData } from '../../../data/empty'
 import { initialData } from '../../../data/initial'
 import { item, mechinaDraft } from './fixtures'
 
@@ -98,5 +99,27 @@ describe('התנגשויות', () => {
     const conflicts = findConflicts(applySelection(items, sel))
     expect(conflicts.some((c) => c.names.includes('מבוא למחשבים'))).toBe(true)
     expect(conflicts.some((c) => c.names.every((n) => n.startsWith('מתמטיקה')))).toBe(false)
+  })
+})
+
+describe('בחירות שמורות של האשף', () => {
+  it('ייבוא בסביבה ריקה משתמש בבחירות ששמרתי, ולא בניחוש', () => {
+    const subjects = collectSubjects(mechinaDraft())
+    const saved = withWizard(emptyData, {
+      subjects: { 'מבוא למחשבים': false },
+      variants: { 'מתמטיקה': 'רונן שחק', 'כתיבה מדעית': 'קבוצה 9' },
+    })
+    const sel = initialSelection(subjects, saved)
+    expect(sel.subjects['מבוא למחשבים']).toBe(false)
+    expect(sel.subjects['פיזיקה']).toBe(true)
+    expect(sel.variants['מתמטיקה']).toBe('רונן שחק')
+    // קבוצה שכבר לא קיימת בקובץ לא נבחרת
+    expect(sel.variants['כתיבה מדעית']).not.toBe('קבוצה 9')
+  })
+
+  it('שמירה חדשה לא מוחקת בחירות של מקצועות שלא הופיעו בקובץ', () => {
+    const first = withWizard(emptyData, { subjects: { 'אנגלית': true }, variants: { 'אנגלית': 'שרגא פרייס' } })
+    const second = withWizard(first, { subjects: { 'מתמטיקה': true }, variants: { 'מתמטיקה': 'רונן שחק' } })
+    expect(second.wizard!.variants).toEqual({ 'אנגלית': 'שרגא פרייס', 'מתמטיקה': 'רונן שחק' })
   })
 })

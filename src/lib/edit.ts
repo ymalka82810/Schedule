@@ -302,6 +302,9 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     ...(Array.isArray(data.breaks) ? { breaks: data.breaks as ScheduleData['breaks'] } : {}),
     settings: data.settings as unknown as ScheduleData['settings'],
   }
+  if (isObj(data.wizard) && isObj(data.wizard.subjects) && isObj(data.wizard.variants)) {
+    full.wizard = data.wizard as unknown as ScheduleData['wizard']
+  }
   if (isObj(data.source)) full.source = data.source as unknown as ScheduleData['source']
   const lessonIds = new Set(full.lessons.map((l) => l.id))
   if (full.entries.some((e) => !lessonIds.has(e.lessonId))) return { error: 'בקובץ יש שיבוץ לשיעור שלא קיים.' }

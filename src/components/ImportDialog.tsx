@@ -16,6 +16,7 @@ import {
   findConflicts,
   initialSelection,
   needsWizard,
+  withWizard,
   type Selection,
 } from '../lib/pdf/whoami'
 import { WhoAmI } from './WhoAmI'
@@ -44,6 +45,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   /** הטיוטה כפי שנקראה מהקובץ, עם כל הקבוצות. האשף מסנן ממנה מחדש בכל פעם */
   const [fullItems, setFullItems] = useState<DraftItem[]>([])
   const [selection, setSelection] = useState<Selection>({ subjects: {}, variants: {} })
+  /** הבחירה שאושרה באשף, כדי לשמור אותה עם המערכת. null = האשף לא הופעל או שדילגו עליו */
+  const [confirmedSel, setConfirmedSel] = useState<Selection | null>(null)
   /** האם היו תיקונים ידניים בטיוטה מאז האשף. חזרה לאשף מבטלת אותם */
   const [edited, setEdited] = useState(false)
   /** תמונות העמודים המקוריים */
@@ -109,6 +112,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
 
   const finishWizard = (fileName: string, sel: Selection | null) => {
     const items = applySelection(fullItems, sel ?? { subjects: {}, variants: {} }, draft.teachers)
+    setConfirmedSel(sel)
     setDraft((d) => ({ ...d, items }))
     setEdited(false)
     if (items.length) setSelectedDay(firstDayOf(items))
@@ -135,6 +139,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
       }
       setDraft({ ...result, versionDate: result.versionDate ?? dateFromFileName(file.name) })
       setFullItems(result.items)
+      setConfirmedSel(null)
       setEdited(false)
       setSelectedDay(firstDayOf(result.items))
       if (needsWizard(result.items, result.teachers)) {
@@ -201,7 +206,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
 
   const save = () => {
     if (problems.length || step.name !== 'review') return
-    onSave(draftToData(draft.items, current, { fileName: step.fileName, versionDate: draft.versionDate }))
+    const next = draftToData(draft.items, current, { fileName: step.fileName, versionDate: draft.versionDate })
+    onSave(confirmedSel ? withWizard(next, confirmedSel) : next)
   }
 
   const checkCount = draft.items.filter((i) => i.check).length

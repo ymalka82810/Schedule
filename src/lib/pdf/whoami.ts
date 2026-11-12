@@ -116,8 +116,9 @@ export function needsWizard(items: DraftItem[], teachers: Teacher[] = []): boole
 }
 
 /**
- * בחירה התחלתית. אם כבר יש מערכת שמורה, מנחשים ממנה: מקצועות שכבר יש לי,
- * והמרצה או הקבוצה שכבר יש לי בכל מקצוע. בלי מערכת שמורה: כל המקצועות, בלי בחירת קבוצה.
+ * בחירה התחלתית. קודם הבחירות שנשמרו בייבוא הקודם (current.wizard).
+ * מקצוע שלא היה אז, או קבוצה שכבר לא קיימת, מנוחשים מהמערכת השמורה: מקצועות שכבר יש לי,
+ * והמרצה או הקבוצה שכבר יש לי. בלי שום דבר שמור: כל המקצועות, בלי בחירת קבוצה.
  */
 export function initialSelection(
   subjects: Subject[],
@@ -129,11 +130,15 @@ export function initialSelection(
   const known = new Set(mine.map((l) => l.name.trim()))
   const anyKnown = subjects.some((s) => known.has(s.name))
 
+  const saved = current?.wizard
   const sel: Selection = { subjects: {}, variants: {} }
   for (const s of subjects) {
-    sel.subjects[s.name] = anyKnown ? known.has(s.name) : true
+    const savedOn = saved?.subjects[s.name]
+    sel.subjects[s.name] = savedOn ?? (anyKnown ? known.has(s.name) : true)
     let chosen: string | null = null
-    if (s.variants.length) {
+    const savedKey = saved?.variants[s.name]
+    if (savedKey && s.variants.some((v) => v.key === savedKey)) chosen = savedKey
+    else if (s.variants.length) {
       for (const l of mine.filter((l) => l.name.trim() === s.name)) {
         const key = (s.by === 'group' ? l.group : l.teacher)?.trim()
         if (key && s.variants.some((v) => v.key === key)) {
@@ -316,3 +321,14 @@ export function variantClashes(
 /** התנגשות כמשפט קצר לתצוגה */
 export const describeConflict = (c: Conflict) =>
   `יום ${DAY_NAMES[c.day]} ${formatTime(c.start)}–${formatTime(c.end)}: ${c.names.join(' מול ')}`
+
+/** שומר את בחירות האשף עם המערכת. מקצועות שלא הופיעו בקובץ הזה שומרים את הבחירה הקודמת */
+export function withWizard(data: ScheduleData, sel: Selection): ScheduleData {
+  return {
+    ...data,
+    wizard: {
+      subjects: { ...data.wizard?.subjects, ...sel.subjects },
+      variants: { ...data.wizard?.variants, ...sel.variants },
+    },
+  }
+}

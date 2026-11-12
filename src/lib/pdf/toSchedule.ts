@@ -37,15 +37,16 @@ export function draftToData(items: DraftItem[], base: ScheduleData): ScheduleDat
   }
 
   const sorted = [...items].sort((a, b) => a.day - b.day || a.start - b.start)
-  sorted.forEach((item, i) => {
+  // המזהה של השיבוץ הוא המזהה מהטיוטה: כך לחיצה על בלוק בלוח הטיוטה מוצאת את כרטיס העריכה שלו
+  sorted.forEach((item) => {
     const options = item.options.filter((o) => o.name.trim())
     if (!options.length) return
     const slot = { day: item.day, start: item.start, end: item.end }
     const ids = options.map(lessonFor)
     if (ids.length === 1) {
-      entries.push({ id: `pe${i}`, slot, lessonId: ids[0] })
+      entries.push({ id: item.id, slot, lessonId: ids[0] })
     } else {
-      choiceGroups.push({ id: `pg${i}`, slot, optionLessonIds: ids, chosenLessonId: null })
+      choiceGroups.push({ id: item.id, slot, optionLessonIds: ids, chosenLessonId: null })
     }
   })
 

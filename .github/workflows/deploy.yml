@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # הבדיקות רצות לפני הבנייה: אם פענוח נשבר, האתר לא מתעדכן
+      - run: npm test
       - run: npm run build
         env:
           # כתובת שרת Convex (ציבורית, לא סוד). מוגדרת ב-Settings > Variables של הריפו

@@ -6,6 +6,16 @@ import { DAYS, DAY_NAMES, formatTime, startOfWeek } from '../lib/time'
 import type { DraftItem, DraftOption, DraftSchedule } from '../lib/pdf/draft'
 import { readSchedulePdf } from '../lib/pdf/extract'
 import { draftToData, validateDraft } from '../lib/pdf/toSchedule'
+import {
+  applySelection,
+  collectSubjects,
+  describeConflict,
+  findConflicts,
+  initialSelection,
+  needsWizard,
+  type Selection,
+} from '../lib/pdf/whoami'
+import { WhoAmI } from './WhoAmI'
 
 interface Props {
   current: ScheduleData
@@ -20,6 +30,7 @@ interface Props {
 type Step =
   | { name: 'pick' }
   | { name: 'reading'; file: string }
+  | { name: 'whoami'; fileName: string }
   | { name: 'review'; fileName: string }
   | { name: 'error'; message: string }
 
@@ -32,6 +43,11 @@ const fromInput = (v: string): Minutes | null => {
 export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore, onClose }: Props) {
   const [step, setStep] = useState<Step>({ name: 'pick' })
   const [draft, setDraft] = useState<DraftSchedule>({ items: [], warnings: [] })
+  /** הטיוטה כפי שנקראה מהקובץ, עם כל הקבוצות. האשף מסנן ממנה מחדש בכל פעם */
+  const [fullItems, setFullItems] = useState<DraftItem[]>([])
+  const [selection, setSelection] = useState<Selection>({ subjects: {}, variants: {} })
+  /** האם היו תיקונים ידניים בטיוטה מאז האשף. חזרה לאשף מבטלת אותם */
+  const [edited, setEdited] = useState(false)
   const [selectedDay, setSelectedDay] = useState<DayIndex>(0)
   const [onlyCheck, setOnlyCheck] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -54,6 +70,22 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   const blocks = useMemo(() => buildBlocks(preview), [preview])
   const range = useMemo(() => visibleRange(preview, blocks), [preview, blocks])
   const problems = useMemo(() => validateDraft(draft.items), [draft.items])
+  const conflicts = useMemo(() => findConflicts(draft.items), [draft.items])
+
+  const firstDayOf = (items: DraftItem[]) => items.reduce<number>((d, i) => Math.min(d, i.day), 6) as DayIndex
+
+  const finishWizard = (fileName: string, sel: Selection | null) => {
+    const items = sel ? applySelection(fullItems, sel) : fullItems
+    setDraft((d) => ({ ...d, items }))
+    setEdited(false)
+    if (items.length) setSelectedDay(firstDayOf(items))
+    setStep({ name: 'review', fileName })
+  }
+
+  const backToWizard = (fileName: string) => {
+    if (edited && !window.confirm('חזרה לשאלות תבטל את התיקונים שעשית בטיוטה. להמשיך?')) return
+    setStep({ name: 'whoami', fileName })
+  }
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return
@@ -68,9 +100,15 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
         return
       }
       setDraft(result)
-      const firstDay = result.items.reduce<number>((d, i) => Math.min(d, i.day), 6) as DayIndex
-      setSelectedDay(firstDay)
-      setStep({ name: 'review', fileName: file.name })
+      setFullItems(result.items)
+      setEdited(false)
+      setSelectedDay(firstDayOf(result.items))
+      if (needsWizard(result.items)) {
+        setSelection(initialSelection(collectSubjects(result.items), current))
+        setStep({ name: 'whoami', fileName: file.name })
+      } else {
+        setStep({ name: 'review', fileName: file.name })
+      }
     } catch (err) {
       console.error(err)
       setStep({
@@ -80,40 +118,28 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     }
   }
 
-  const updateItem = (id: string, patch: Partial<DraftItem>) =>
-    setDraft((d) => ({ ...d, items: d.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) }))
+  /** כל תיקון ידני בטיוטה עובר כאן */
+  const editItems = (fn: (items: DraftItem[]) => DraftItem[]) => {
+    setEdited(true)
+    setDraft((d) => ({ ...d, items: fn(d.items) }))
+  }
+  const mapItem = (id: string, fn: (i: DraftItem) => DraftItem) =>
+    editItems((items) => items.map((i) => (i.id === id ? fn(i) : i)))
 
+  const updateItem = (id: string, patch: Partial<DraftItem>) => mapItem(id, (i) => ({ ...i, ...patch }))
   const updateOption = (id: string, index: number, patch: Partial<DraftOption>) =>
-    setDraft((d) => ({
-      ...d,
-      items: d.items.map((i) =>
-        i.id === id ? { ...i, options: i.options.map((o, k) => (k === index ? { ...o, ...patch } : o)) } : i,
-      ),
-    }))
-
+    mapItem(id, (i) => ({ ...i, options: i.options.map((o, k) => (k === index ? { ...o, ...patch } : o)) }))
   const removeOption = (id: string, index: number) =>
-    setDraft((d) => ({
-      ...d,
-      items: d.items.map((i) => (i.id === id ? { ...i, options: i.options.filter((_, k) => k !== index) } : i)),
-    }))
-
-  const addOption = (id: string) =>
-    setDraft((d) => ({
-      ...d,
-      items: d.items.map((i) => (i.id === id ? { ...i, options: [...i.options, { name: '' }] } : i)),
-    }))
-
-  const removeItem = (id: string) => setDraft((d) => ({ ...d, items: d.items.filter((i) => i.id !== id) }))
+    mapItem(id, (i) => ({ ...i, options: i.options.filter((_, k) => k !== index) }))
+  const addOption = (id: string) => mapItem(id, (i) => ({ ...i, options: [...i.options, { name: '' }] }))
+  const removeItem = (id: string) => editItems((items) => items.filter((i) => i.id !== id))
 
   const addItem = () => {
     const id = `new${++nextId.current}`
-    setDraft((d) => ({
-      ...d,
-      items: [
-        ...d.items,
-        { id, day: selectedDay, start: 9 * 60, end: 10 * 60, options: [{ name: '' }], raw: '', check: true },
-      ],
-    }))
+    editItems((items) => [
+      ...items,
+      { id, day: selectedDay, start: 9 * 60, end: 10 * 60, options: [{ name: '' }], raw: '', check: true },
+    ])
   }
 
   const save = () => {
@@ -128,7 +154,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     <div className="dialog-backdrop" role="presentation">
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
         <header className="dialog-head">
-          <h2 id="import-title">ייבוא מערכת מקובץ PDF</h2>
+          <h2 id="import-title">{step.name === 'whoami' ? 'מה אני לומד?' : 'ייבוא מערכת מקובץ PDF'}</h2>
           <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>
             ×
           </button>
@@ -182,6 +208,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
             </div>
           )}
 
+          {step.name === 'whoami' && <WhoAmI items={fullItems} selection={selection} onChange={setSelection} />}
+
           {step.name === 'review' && (
             <>
               <section className="import-summary" aria-label="סיכום הקריאה">
@@ -193,6 +221,18 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                   <p className="import-note">
                     {checkCount} שיבוצים מסומנים "כדאי לבדוק": תאים מורכבים שהפענוח שלהם פחות בטוח.
                   </p>
+                )}
+                {conflicts.length > 0 && (
+                  <>
+                    <p className="import-error">
+                      {conflicts.length === 1 ? 'התנגשות אחת' : `${conflicts.length} התנגשויות`} בטיוטה:
+                    </p>
+                    <ul className="whoami-conflicts">
+                      {conflicts.map((c, i) => (
+                        <li key={i}>{describeConflict(c)}</li>
+                      ))}
+                    </ul>
+                  </>
                 )}
                 {draft.warnings.map((w) => (
                   <p key={w} className="import-note">
@@ -252,6 +292,22 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
           )}
         </div>
 
+        {step.name === 'whoami' && (
+          <footer className="dialog-foot">
+            <div className="import-actions">
+              <button type="button" className="btn btn-primary" onClick={() => finishWizard(step.fileName, selection)}>
+                המשך לטיוטה
+              </button>
+              <button type="button" className="btn" onClick={() => finishWizard(step.fileName, null)}>
+                דילוג, להציג את כל הקבוצות
+              </button>
+              <button type="button" className="btn" onClick={onClose}>
+                ביטול
+              </button>
+            </div>
+          </footer>
+        )}
+
         {step.name === 'review' && (
           <footer className="dialog-foot">
             {problems.length > 0 && (
@@ -263,6 +319,11 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
               <button type="button" className="btn btn-primary" disabled={problems.length > 0} onClick={save}>
                 שמירה כמערכת שלי
               </button>
+              {needsWizard(fullItems) && (
+                <button type="button" className="btn" onClick={() => backToWizard(step.fileName)}>
+                  שינוי המקצועות והקבוצות שלי
+                </button>
+              )}
               <button type="button" className="btn" onClick={() => setStep({ name: 'pick' })}>
                 בחירת קובץ אחר
               </button>

@@ -4,7 +4,7 @@ import { WeekGrid } from './WeekGrid'
 import { buildBlocks, visibleRange } from '../lib/layout'
 import { DAYS, DAY_NAMES, formatTime, fromTimeInput as fromInput, startOfWeek, toTimeInput as toInput } from '../lib/time'
 import type { DraftItem, DraftOption, DraftSchedule } from '../lib/pdf/draft'
-import { readSchedulePdf } from '../lib/pdf/extract'
+import { readScheduleFile } from '../lib/pdf/extract'
 import { dateFromFileName } from '../lib/pdf/parseSchedule'
 import { fromBackup, toBackup } from '../lib/edit'
 import { changeKey, diffSchedules, hasImported, rejectChanges, type Change } from '../lib/diff'
@@ -33,7 +33,7 @@ interface Props {
 
 type Step =
   | { name: 'pick' }
-  | { name: 'reading'; file: string }
+  | { name: 'reading'; file: string; message?: string; fraction?: number }
   | { name: 'whoami'; fileName: string }
   | { name: 'review'; fileName: string }
   | { name: 'error'; message: string }
@@ -130,7 +130,9 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     if (!file) return
     setStep({ name: 'reading', file: file.name })
     try {
-      const { draft: result, pages: images } = await readSchedulePdf(file)
+      const { draft: result, pages: images } = await readScheduleFile(file, (message, fraction) =>
+        setStep({ name: 'reading', file: file.name, message, fraction }),
+      )
       setPages(images)
       if (!result.items.length) {
         setStep({
@@ -156,7 +158,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
       console.error(err)
       setStep({
         name: 'error',
-        message: 'לא הצלחתי לקרוא את הקובץ. ודא שזה קובץ PDF תקין, ואם הוא סרוק או תמונה, זה עדיין לא נתמך.',
+        message:
+          'לא הצלחתי לקרוא את הקובץ. ודא שזה קובץ PDF או תמונה תקינים. בזיהוי של תמונה צריך חיבור לאינטרנט בפעם הראשונה, כדי לטעון את הזיהוי בעברית.',
       })
     }
   }
@@ -221,7 +224,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     <div className="dialog-backdrop" role="presentation">
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
         <header className="dialog-head">
-          <h2 id="import-title">{step.name === 'whoami' ? 'מה אני לומד?' : 'ייבוא מערכת מקובץ PDF'}</h2>
+          <h2 id="import-title">{step.name === 'whoami' ? 'מה אני לומד?' : 'ייבוא מערכת מקובץ'}</h2>
           <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>
             ×
           </button>
@@ -231,7 +234,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
           {step.name === 'pick' && (
             <div className="import-pick">
               <p>
-                בחר את קובץ המערכת כפי שקיבלת אותו מהמוסד. הקובץ נקרא בדפדפן בלבד ולא נשלח לשום מקום.
+                בחר את קובץ המערכת כפי שקיבלת אותו מהמוסד: PDF, או צילום או סריקה של הדף. הקובץ נקרא בדפדפן בלבד ולא
+                נשלח לשום מקום.
               </p>
               <p className="muted">
                 אחרי הקריאה תראה טיוטה על הלוח, ותוכל לתקן אותה לפני שהיא נשמרת. שיעורים אישיים, כמו מיגו, לא נמחקים.
@@ -239,13 +243,13 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
               <input
                 ref={fileInput}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="application/pdf,.pdf,image/*"
                 className="visually-hidden"
                 onChange={(e) => void handleFile(e.target.files?.[0])}
               />
               <div className="import-actions">
                 <button type="button" className="btn btn-primary" onClick={() => fileInput.current?.click()}>
-                  בחירת קובץ PDF
+                  בחירת קובץ או תמונה
                 </button>
                 {hasBackup && (
                   <button type="button" className="btn" onClick={onRestore}>
@@ -282,9 +286,13 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
           )}
 
           {step.name === 'reading' && (
-            <p className="import-status" role="status">
-              קורא את הקובץ…
-            </p>
+            <div className="import-status" role="status">
+              <p>{step.message ?? 'קורא את הקובץ…'}</p>
+              {step.fraction !== undefined && (
+                <progress max={1} value={step.fraction} aria-label="התקדמות הזיהוי" />
+              )}
+              {step.message && <p className="muted">זיהוי מתמונה לוקח בערך חצי דקה לעמוד.</p>}
+            </div>
           )}
 
           {step.name === 'error' && (

@@ -1445,3 +1445,10 @@ p {
 .change.is-declined .change-kind {
   opacity: 0.5;
 }
+
+.import-status progress {
+  width: 100%;
+  max-width: 24rem;
+  height: 0.5rem;
+  accent-color: var(--accent);
+}

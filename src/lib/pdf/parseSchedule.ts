@@ -80,6 +80,26 @@ interface Timetable {
   rowTimes: Map<number, { start: Minutes; end: Minutes }>
 }
 
+/**
+ * הימים בטבלה רצופים. אם רוב שמות הימים זוהו (למשל בסריקה, שבה "ב'" נקרא כמקף),
+ * משלימים את העמודות שביניהם לפי הסדר: בטבלה מימין לשמאל יום + עמודה קבוע.
+ */
+export function fillDays(dayOfCol: Map<number, DayIndex>): Map<number, DayIndex> {
+  const pairs = [...dayOfCol]
+  for (const dir of [1, -1]) {
+    const k = pairs[0][1] + dir * pairs[0][0]
+    if (!pairs.every(([c, d]) => d + dir * c === k)) continue
+    const cols = pairs.map(([c]) => c)
+    const out = new Map(dayOfCol)
+    for (let c = Math.min(...cols); c <= Math.max(...cols); c++) {
+      const d = k - dir * c
+      if (!out.has(c) && d >= 0 && d <= 5) out.set(c, d as DayIndex)
+    }
+    return out
+  }
+  return dayOfCol
+}
+
 function findTimetable(table: Table): Timetable | null {
   // שורת הימים: השורה עם הכי הרבה תאים שהם אות יום
   let headerRow = -1
@@ -99,6 +119,7 @@ function findTimetable(table: Table): Timetable | null {
     }
   }
   if (best < 3) return null
+  dayOfCol = fillDays(dayOfCol)
 
   // עמודת השעות: זו שמכילה הכי הרבה טווחי שעות
   const counts = new Map<number, number>()
@@ -153,7 +174,8 @@ function parseTimetable(table: Table, tt: Timetable, teachers: Teacher[], warnin
     }
 
     // כמה בלוקים או "/" בתא = שיעורים במקביל. בלוק אחד בלי "/" = שיעור יחיד
-    const check = blocks.length > 1
+    // מילה שזוהתה בסריקה בביטחון נמוך: כדאי לבדוק מול המקור
+    const check = blocks.length > 1 || cell.words.some((w) => w.doubt)
 
     for (let r = cell.r1; r <= cell.r2; r++) {
       const time = tt.rowTimes.get(r)

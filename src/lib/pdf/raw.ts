@@ -13,6 +13,8 @@ export interface RawWord {
   h: number
   /** מזהה הגופן. גופנים שונים באותו תא (רגיל מול מודגש) מפרידים בין קטעים */
   font: string
+  /** נקרא בזיהוי תווים (OCR) בביטחון נמוך */
+  doubt?: boolean
 }
 
 export interface HLine {

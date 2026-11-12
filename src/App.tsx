@@ -277,7 +277,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
           <p>הלוח ריק. אפשר לייבא מערכת מקובץ PDF, או להוסיף שיעורים בעצמך.</p>
           <div className="import-actions">
             <button type="button" className="btn btn-primary" onClick={() => setImporting(true)}>
-              ייבוא מקובץ PDF
+              ייבוא מקובץ או תמונה
             </button>
             <button
               type="button"

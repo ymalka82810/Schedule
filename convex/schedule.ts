@@ -11,11 +11,11 @@ export const get = queryGeneric({
       .query('schedules')
       .withIndex('by_user', (q) => q.eq('userId', userId))
       .unique()
-    return row ? { data: row.data, backup: row.backup ?? null } : null
+    return row ? { data: row.data, backup: row.backup ?? null, updatedAt: row.updatedAt } : null
   },
 })
 
-/** שומר את המערכת (יוצר או מחליף). רק הבעלים */
+/** שומר את המערכת (יוצר או מחליף). רק הבעלים. מחזיר את זמן העדכון, לסנכרון מהמכשיר */
 export const save = mutationGeneric({
   args: { data: v.any(), backup: v.any() },
   handler: async (ctx, args) => {
@@ -27,5 +27,6 @@ export const save = mutationGeneric({
     const doc = { data: args.data, backup: args.backup ?? null, updatedAt: Date.now() }
     if (existing) await ctx.db.patch(existing._id, doc)
     else await ctx.db.insert('schedules', { userId, ...doc })
+    return doc.updatedAt
   },
 })

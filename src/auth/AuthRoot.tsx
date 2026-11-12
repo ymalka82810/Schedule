@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { clearOwnerCache, loadOwnerCache, saveOwnerCache } from './offlineCache'
+import { clearOwnerCache, decideSync, loadOwnerCache, markSynced, saveOwnerCache } from './offlineCache'
 import { ConvexReactClient, useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react'
 import { anyApi } from 'convex/server'
@@ -20,7 +20,8 @@ export function AuthRoot({ url }: { url: string }) {
 
 /**
  * בזמן ההמתנה לשרת: אם אין רשת, או שההמתנה ארוכה, ויש עותק של המערכת במכשיר,
- * מציגים אותו לקריאה. כשהחיבור חוזר, הדף מתחלף לבד למערכת מהשרת.
+ * מציגים אותו, ואפשר לערוך. השינויים נשמרים במכשיר ונשלחים לשרת כשהחיבור חוזר
+ * (ראו OwnerApp). כשהחיבור חוזר, הדף מתחלף לבד למערכת מהשרת.
  */
 function WaitOrOffline() {
   const [slow, setSlow] = useState(false)
@@ -43,7 +44,11 @@ function WaitOrOffline() {
       <App
         initialData={cache.data}
         initialBackup={cache.backup}
-        account={{ kind: 'offline', email: cache.email, savedAt: cache.savedAt }}
+        account={{ kind: 'offline', email: cache.email, savedAt: cache.savedAt, pending: !!cache.pending }}
+        onPersist={(data, backup) => {
+          const now = loadOwnerCache() ?? cache
+          saveOwnerCache({ ...now, data, backup, pending: true })
+        }}
       />
     )
   }
@@ -107,14 +112,76 @@ function Router() {
   )
 }
 
-/** הבעלים: טוען את המערכת מהשרת ושומר אליו כל שינוי */
+/**
+ * הבעלים: טוען את המערכת מהשרת ושומר אליו כל שינוי.
+ * כל שינוי נשמר קודם במכשיר ומסומן כממתין, ורק כשהשרת מאשר הסימון יורד.
+ * כך שינוי שנעשה בלי חיבור, או שהחיבור נפל באמצעו, נשלח בכניסה הבאה.
+ */
 function OwnerApp({ email, signOut }: { email: string; signOut: () => void }) {
   const doc = useQuery(anyApi.schedule.get, {}) as
-    | { data: ScheduleData; backup: ScheduleData | null }
+    | { data: ScheduleData; backup: ScheduleData | null; updatedAt?: number }
     | null
     | undefined
   const save = useMutation(anyApi.schedule.save)
   const seeded = useRef(false)
+  /** המערכת לפתיחה אחרי הסנכרון. null = עוד לא הוחלט */
+  const [start, setStart] = useState<{ data: ScheduleData; backup: ScheduleData | null; note?: string } | null>(null)
+  const [unsynced, setUnsynced] = useState(false)
+
+  /** שומר במכשיר, שולח לשרת, ומוריד את הסימון כשהשרת אישר */
+  const persist = (data: ScheduleData, backup: ScheduleData | null, serverUpdatedAt?: number) => {
+    const prev = loadOwnerCache()
+    const token = saveOwnerCache({
+      email,
+      data,
+      backup,
+      pending: true,
+      serverUpdatedAt: serverUpdatedAt ?? prev?.serverUpdatedAt,
+    })
+    setUnsynced(true)
+    void (save({ data, backup }) as Promise<number | null>)
+      .then((updatedAt) => {
+        if (typeof updatedAt === 'number') markSynced(token, updatedAt)
+        setUnsynced(!!loadOwnerCache()?.pending)
+      })
+      .catch(() => setUnsynced(true))
+  }
+
+  // כשהמערכת מהשרת מגיעה: אם יש במכשיר שינויים שלא נשלחו, שולחים אותם (או שואלים, אם גם השרת השתנה).
+  // זה סנכרון עם מערכות חיצוניות (המכשיר והשרת), ורץ פעם אחת בטעינה, ולכן setState כאן במקום
+  /* oxlint-disable react/set-state-in-effect, react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!doc || start) return
+    const decision = decideSync(loadOwnerCache(), email, doc.updatedAt)
+    if (decision.action === 'none') {
+      saveOwnerCache({ email, data: doc.data, backup: doc.backup, pending: false, serverUpdatedAt: doc.updatedAt })
+      setStart({ data: doc.data, backup: doc.backup })
+      return
+    }
+    const keepDevice =
+      decision.action === 'upload' ||
+      window.confirm(
+        'בזמן שהיית בלי חיבור, המערכת השתנתה גם בשרת (כנראה ממכשיר אחר).\n\n' +
+          'אישור = להשאיר את מה שערכת במכשיר הזה. ביטול = להשאיר את מה שבשרת.\n' +
+          'הגרסה שלא נבחרה נשמרת, ואפשר לחזור אליה ב"ייבוא וגיבוי" ← שחזור.',
+      )
+    if (keepDevice) {
+      // בהתנגשות, הגרסה מהשרת נשמרת כגיבוי לשחזור
+      const backup = decision.action === 'conflict' ? doc.data : decision.backup
+      persist(decision.data, backup, doc.updatedAt)
+      setStart({
+        data: decision.data,
+        backup,
+        note: decision.action === 'upload' ? 'השינויים שעשית בלי חיבור נשלחו לשרת.' : undefined,
+      })
+    } else {
+      saveOwnerCache({ email, data: doc.data, backup: decision.data, pending: false, serverUpdatedAt: doc.updatedAt })
+      void save({ data: doc.data, backup: decision.data })
+      setStart({ data: doc.data, backup: decision.data })
+    }
+    // persist ו-save יציבים מספיק כאן: ההחלטה מתקבלת פעם אחת בטעינה
+  }, [doc, start, email])
+  /* oxlint-enable react/set-state-in-effect, react-hooks/exhaustive-deps */
 
   // בכניסה הראשונה אין עדיין מערכת בשרת: מתחילים מהמערכת האישית ושומרים אותה
   useEffect(() => {
@@ -124,21 +191,17 @@ function OwnerApp({ email, signOut }: { email: string; signOut: () => void }) {
     }
   }, [doc, save])
 
-  useEffect(() => {
-    if (doc) saveOwnerCache({ email, data: doc.data, backup: doc.backup })
-  }, [doc, email])
-
   if (doc === undefined) return <WaitOrOffline />
+  if (doc === null) return <Loading />
+  if (!start) return <Loading />
 
   return (
     <App
-      initialData={doc?.data ?? initialData}
-      initialBackup={doc?.backup ?? null}
-      account={{ kind: 'owner', email, signOut }}
-      onPersist={(data, backup) => {
-        saveOwnerCache({ email, data, backup })
-        void save({ data, backup })
-      }}
+      initialData={start.data}
+      initialBackup={start.backup}
+      initialToast={start.note}
+      account={{ kind: 'owner', email, signOut, unsynced }}
+      onPersist={(data, backup) => persist(data, backup)}
     />
   )
 }

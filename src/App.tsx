@@ -13,6 +13,7 @@ import { resolveBlock } from './lib/edit'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
 import { loadTheme, saveTheme, type Theme } from './lib/storage'
+import { savedAtDate } from './auth/offlineCache'
 import { addDays, dateOfDay, formatWeekRange, isSameDay, isoDate, startOfWeek } from './lib/time'
 
 type Dialog =
@@ -26,11 +27,13 @@ interface Props {
   /** המערכת שלפני הייבוא האחרון, לשחזור */
   initialBackup: ScheduleData | null
   account: Account
-  /** נקרא בכל שינוי בנתונים. רק אצל הבעלים, כדי לשמור בשרת */
+  /** נקרא בכל שינוי בנתונים. רק אצל הבעלים, כדי לשמור בשרת (או במכשיר, בלי חיבור) */
   onPersist?: (data: ScheduleData, backup: ScheduleData | null) => void
+  /** הודעה להציג בפתיחה, למשל שהשינויים מהמכשיר נשלחו לשרת */
+  initialToast?: string
 }
 
-export default function App({ initialData, initialBackup, account, onPersist }: Props) {
+export default function App({ initialData, initialBackup, account, onPersist, initialToast }: Props) {
   const [data, setData] = useState(initialData)
   const [backup, setBackup] = useState(initialBackup)
   const [importing, setImporting] = useState(false)
@@ -38,7 +41,9 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
   const [dialog, setDialog] = useState<Dialog | null>(null)
   /** היסטוריה לביטול פעולה, רק בזיכרון של הדף */
   const [history, setHistory] = useState<Array<{ data: ScheduleData; backup: ScheduleData | null; label: string }>>([])
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(initialToast ?? null)
+  /** בלי חיבור: האם נעשו כאן שינויים שממתינים לשרת */
+  const [offlineEdits, setOfflineEdits] = useState(account.kind === 'offline' && !!account.pending)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
@@ -95,6 +100,7 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
     setData(next)
     setBackup(nextBackup)
     onPersist?.(next, nextBackup)
+    if (account.kind === 'offline') setOfflineEdits(true)
   }
 
   const undo = () => {
@@ -246,13 +252,19 @@ export default function App({ initialData, initialBackup, account, onPersist }: 
 
       {account.kind === 'offline' ? (
         <p className="mode-note is-offline" role="status">
-          אין חיבור לשרת. מוצגת המערכת כפי שנשמרה במכשיר ב-
-          {new Date(account.savedAt).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}. שינויים
-          שתעשה עכשיו לא יישמרו.
+          {offlineEdits
+            ? 'אין חיבור לשרת. השינויים נשמרים במכשיר הזה, ויישלחו לשרת כשהחיבור יחזור.'
+            : `אין חיבור לשרת. מוצגת המערכת כפי שנשמרה במכשיר ב-${savedAtDate(account.savedAt).toLocaleString('he-IL', {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              })}. אפשר לערוך, והשינויים יישלחו לשרת כשהחיבור יחזור.`}
         </p>
       ) : account.kind === 'owner' ? (
-        <p className="mode-note is-owner">
-          מחובר כ-<bdi dir="ltr">{account.email}</bdi>. המערכת נשמרת בשרת.
+        <p className={`mode-note is-owner${account.unsynced ? ' is-offline' : ''}`} role="status">
+          מחובר כ-<bdi dir="ltr">{account.email}</bdi>.{' '}
+          {account.unsynced
+            ? 'יש שינויים שעוד לא הגיעו לשרת. הם שמורים במכשיר ויישלחו כשהחיבור יתייצב.'
+            : 'המערכת נשמרת בשרת.'}
         </p>
       ) : (
         <p className="mode-note">

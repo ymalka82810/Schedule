@@ -7,7 +7,7 @@ import type { DraftItem, DraftOption, DraftSchedule } from '../lib/pdf/draft'
 import { readSchedulePdf } from '../lib/pdf/extract'
 import { dateFromFileName } from '../lib/pdf/parseSchedule'
 import { fromBackup, toBackup } from '../lib/edit'
-import { diffSchedules, hasImported, type Change } from '../lib/diff'
+import { changeKey, diffSchedules, hasImported, rejectChanges, type Change } from '../lib/diff'
 import { draftToData, validateDraft } from '../lib/pdf/toSchedule'
 import {
   applySelection,
@@ -47,6 +47,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
   const [selection, setSelection] = useState<Selection>({ subjects: {}, variants: {} })
   /** הבחירה שאושרה באשף, כדי לשמור אותה עם המערכת. null = האשף לא הופעל או שדילגו עליו */
   const [confirmedSel, setConfirmedSel] = useState<Selection | null>(null)
+  /** שינויים מול המערכת השמורה שבחרתי לא לקבל */
+  const [rejected, setRejected] = useState<Set<string>>(() => new Set())
   /** האם היו תיקונים ידניים בטיוטה מאז האשף. חזרה לאשף מבטלת אותם */
   const [edited, setEdited] = useState(false)
   /** תמונות העמודים המקוריים */
@@ -140,6 +142,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
       setDraft({ ...result, versionDate: result.versionDate ?? dateFromFileName(file.name) })
       setFullItems(result.items)
       setConfirmedSel(null)
+      setRejected(new Set())
       setEdited(false)
       setSelectedDay(firstDayOf(result.items))
       if (needsWizard(result.items, result.teachers)) {
@@ -206,7 +209,8 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
 
   const save = () => {
     if (problems.length || step.name !== 'review') return
-    const next = draftToData(draft.items, current, { fileName: step.fileName, versionDate: draft.versionDate })
+    const fresh = draftToData(draft.items, current, { fileName: step.fileName, versionDate: draft.versionDate })
+    const next = rejectChanges(current, fresh, (changes ?? []).filter((c) => rejected.has(changeKey(c))))
     onSave(confirmedSel ? withWizard(next, confirmedSel) : next)
   }
 
@@ -329,7 +333,22 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                 ))}
               </section>
 
-              {changes && <ChangesSummary changes={changes} current={current} versionDate={draft.versionDate} />}
+              {changes && (
+                <ChangesSummary
+                  changes={changes}
+                  current={current}
+                  versionDate={draft.versionDate}
+                  rejected={rejected}
+                  onToggle={(key) =>
+                    setRejected((r) => {
+                      const next = new Set(r)
+                      if (next.has(key)) next.delete(key)
+                      else next.add(key)
+                      return next
+                    })
+                  }
+                />
+              )}
 
               <WeekGrid
                 weekStart={weekStart}
@@ -453,11 +472,16 @@ function ChangesSummary({
   changes,
   current,
   versionDate,
+  rejected,
+  onToggle,
 }: {
   changes: Change[]
   current: ScheduleData
   versionDate?: string
+  rejected: Set<string>
+  onToggle: (key: string) => void
 }) {
+  const declined = changes.filter((c) => rejected.has(changeKey(c))).length
   const src = current.source
   const from = src ? `${src.fileName}${src.versionDate ? `, מעודכנת ל-${src.versionDate}` : ''}` : null
   return (
@@ -470,9 +494,21 @@ function ChangesSummary({
       {changes.length === 0 ? (
         <p>אין שינויים בשיעורים.</p>
       ) : (
+        <>
+        <p className="import-note">
+          כל שינוי מסומן לקבלה. הסר את הסימון משינוי שאתה לא רוצה, והשיעור יישאר כמו במערכת השמורה.
+          {declined > 0 && ` לא תקבל ${declined === 1 ? 'שינוי אחד' : `${declined} שינויים`}.`}
+        </p>
         <ul className="changes-list">
-          {changes.map((c, i) => (
-            <li key={i} className={`change is-${c.kind}`}>
+          {changes.map((c) => (
+            <li key={changeKey(c)} className={`change is-${c.kind}${rejected.has(changeKey(c)) ? ' is-declined' : ''}`}>
+              <input
+                type="checkbox"
+                className="change-accept"
+                aria-label={`לקבל: ${CHANGE_TITLES[c.kind]} ${c.label}`}
+                checked={!rejected.has(changeKey(c))}
+                onChange={() => onToggle(changeKey(c))}
+              />
               <span className="change-kind">{CHANGE_TITLES[c.kind]}</span>
               <span>
                 {c.label}, <bdi>{when(c)}</bdi>
@@ -484,6 +520,7 @@ function ChangesSummary({
             </li>
           ))}
         </ul>
+        </>
       )}
     </section>
   )

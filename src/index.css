@@ -1427,3 +1427,21 @@ p {
   padding: 0.25rem 0;
   border-bottom: 1px solid var(--line);
 }
+
+/* ---------- בחירה מה לקבל מגרסה חדשה ---------- */
+.change-accept {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  align-self: center;
+  accent-color: var(--accent);
+}
+
+.change.is-declined > span:last-child {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.change.is-declined .change-kind {
+  opacity: 0.5;
+}

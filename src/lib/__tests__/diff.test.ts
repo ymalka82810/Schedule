@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { initialData } from '../../data/initial'
-import { diffSchedules, hasImported } from '../diff'
+import { changeKey, diffSchedules, hasImported, rejectChanges } from '../diff'
 import { moveEntry, removeEntry, updateLesson } from '../edit'
 import { draftToData } from '../pdf/toSchedule'
 import { item } from '../pdf/__tests__/fixtures'
@@ -61,5 +61,30 @@ describe('ייבוא גרסה חדשה שומר על ההתאמות האישיו
     })
     expect(data.source).toMatchObject({ fileName: 'מערכת.pdf', versionDate: '18.10.2026' })
     expect(hasImported(data)).toBe(true)
+  })
+})
+
+describe('ויתור על שינויים בגרסה חדשה', () => {
+  const englishSun = initialData.entries.find((e) => e.lessonId === 'english' && e.slot.day === 0)!
+  const writing = initialData.entries.find((e) => e.lessonId === 'writing')!
+  let next = moveEntry(initialData, englishSun.id, { day: 0, start: 19 * 60, end: 20 * 60 })
+  next = removeEntry(next, writing.id)
+  const changes = diffSchedules(initialData, next)
+
+  it('ויתור על הכול מחזיר את המערכת השמורה', () => {
+    expect(diffSchedules(initialData, rejectChanges(initialData, next, changes))).toEqual([])
+  })
+
+  it('ויתור על שינוי אחד משאיר את השאר', () => {
+    const removed = changes.filter((c) => c.kind === 'removed')
+    const result = rejectChanges(initialData, next, removed)
+    const left = diffSchedules(initialData, result)
+    expect(left.map((c) => c.kind)).toEqual(['moved'])
+    // השיעור שבוטל חזר, עם השיעור שלו
+    expect(result.entries.some((e) => e.slot.day === writing.slot.day && e.slot.start === writing.slot.start)).toBe(true)
+  })
+
+  it('לכל שינוי מפתח שונה', () => {
+    expect(new Set(changes.map(changeKey)).size).toBe(changes.length)
   })
 })

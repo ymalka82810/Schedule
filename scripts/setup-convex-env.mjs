@@ -5,6 +5,9 @@
 import { execFileSync } from 'node:child_process'
 import { exportJWK, exportPKCS8, generateKeyPair } from 'jose'
 
+// Convex Auth דורש SITE_URL גם בכניסה עם קוד למייל (הוא בונה ממנו כתובת חזרה)
+const SITE_URL = process.env.SITE_URL || 'https://ymalka82810.github.io/Schedule'
+
 function convex(args) {
   return execFileSync('npx', ['convex', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 }
@@ -41,6 +44,7 @@ if (isSet('JWT_PRIVATE_KEY') && isSet('JWKS')) {
   setEnv('JWKS', jwks)
 }
 
+setEnv('SITE_URL', SITE_URL)
 setEnv('ALLOWED_EMAIL', process.env.ALLOWED_EMAIL.trim())
 setEnv('AUTH_RESEND_KEY', process.env.RESEND_API_KEY.trim())
 console.log('הסתיים. עכשיו אפשר להריץ מחדש את "Deploy to GitHub Pages".')

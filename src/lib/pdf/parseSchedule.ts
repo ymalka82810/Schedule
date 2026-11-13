@@ -151,7 +151,7 @@ function findTimetable(table: Table): Timetable | null {
   return { dayOfCol, timeCol, headerRow, rowTimes }
 }
 
-const optionKey = (o: DraftOption) => `${o.name}|${o.teacher ?? ''}|${o.group ?? ''}|${o.room ?? ''}`
+const optionKey = (o: DraftOption) => `${o.name}|${o.teacher ?? ''}|${o.group ?? ''}|${o.room ?? ''}|${o.kind ?? ''}`
 const signature = (opts: DraftOption[]) => opts.map(optionKey).sort().join('#')
 
 let seq = 0

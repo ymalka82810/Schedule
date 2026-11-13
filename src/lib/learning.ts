@@ -199,3 +199,39 @@ export function lastStuck(
     .at(-1)
   return last?.stuck ? { stuck: last.stuck, date: last.date } : null
 }
+
+/**
+ * מילים בשם של יעד שמרמזות על סוג הלמידה. הסדר חשוב: ידע קודם ("תרגול אוצר מילים" = ידע),
+ * אחר כך יצירה ("תרגול כתיבה" = יצירה), ובסוף מיומנות. אימון כושר וקריאה להנאה נשארים בלי סוג.
+ */
+const KIND_HINTS: Array<{ kind: GoalKind; words: string[] }> = [
+  {
+    kind: 'knowledge',
+    words: ['אוצר מילים', 'מילים', 'מילון', 'שינון', 'לשנן', 'מושגים', 'הגדרות', 'נוסחאות', 'תאריכים', 'חזרה', 'vocabulary', 'vocab'],
+  },
+  {
+    kind: 'creative',
+    words: ['כתיבה', 'כתיבת', 'לכתוב', 'סיפור', 'סיפורים', 'רומן', 'פרויקט', 'עיצוב', 'ציור', 'הלחנה', 'מאמר', 'תזה', 'יצירה', 'עבודה סמינריונית'],
+  },
+  {
+    kind: 'skill',
+    words: ['תרגול', 'לתרגל', 'תרגילים', 'פתרון', 'פתרונות', 'נגינה', 'לנגן', 'גיטרה', 'פסנתר', 'כינור', 'תופים', 'דיבור', 'שיחה', 'הקלדה', 'תכנות', 'שחמט'],
+  },
+]
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * מנחש סוג למידה לפי השם של היעד, כהצעה בלבד: "תרגול פיזיקה" = מיומנות, "אוצר מילים באנגלית" = ידע.
+ * מחזיר גם את המילה שבגללה, כדי להסביר. null = אין רמז ברור.
+ */
+export function guessKind(name: string): { kind: GoalKind; word: string } | null {
+  const text = ` ${name.toLowerCase().replace(/[^\u05d0-\u05eaa-z\s]/g, ' ')} `
+  for (const { kind, words } of KIND_HINTS) {
+    for (const word of words) {
+      // מילה שלמה, עם אותיות שימוש בתחילתה: "והתרגול", "לכתיבה"
+      if (new RegExp(`\\s[והלבמש]{0,2}${escapeRe(word)}(?=\\s)`).test(text)) return { kind, word }
+    }
+  }
+  return null
+}

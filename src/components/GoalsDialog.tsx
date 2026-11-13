@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { DayIndex, Goal, GoalKind, PlanSettings, ScheduleData } from '../types'
-import { KINDS, blocksOf, removeReview, sessionLength } from '../lib/learning'
+import { KINDS, blocksOf, guessKind, removeReview, sessionLength } from '../lib/learning'
 import { removeGoal, saveGoal, savePlanSettings } from '../lib/edit'
 import { planSettings, planWeek, subjectNames } from '../lib/plan'
 import { DAYS, DAY_NAMES, fromTimeInput, toTimeInput } from '../lib/time'
@@ -44,6 +44,9 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
   const prefs = useMemo(() => learnedPrefs(draft), [draft])
 
   const updateGoal = (g: Goal, patch: Partial<Goal>) => setDraft((d) => saveGoal(d, { ...g, ...patch }))
+  /** בחירת סוג למידה: גם אורך המפגש ומספר המפגשים ביום מתאימים את עצמם לסוג */
+  const pickKind = (g: Goal, k: GoalKind | undefined) =>
+    updateGoal(g, k ? { kind: k, sessionMinutes: KINDS[k].session, maxPerDay: KINDS[k].maxPerDay } : { kind: undefined })
   const addGoal = () => {
     const next = saveGoal(draft, { ...newGoal(), name: `יעד ${draft.goals.length + 1}` })
     setDraft(next)
@@ -126,19 +129,26 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                               type="radio"
                               name={`kind-${g.id}`}
                               checked={g.kind === k}
-                              onChange={() =>
-                                updateGoal(
-                                  g,
-                                  k
-                                    ? { kind: k, sessionMinutes: KINDS[k].session, maxPerDay: KINDS[k].maxPerDay }
-                                    : { kind: undefined },
-                                )
-                              }
+                              onChange={() => pickKind(g, k)}
                             />
                             <span>{k ? KINDS[k].label : 'בלי סוג'}</span>
                           </label>
                         ))}
                       </div>
+                      {(() => {
+                        // הצעה לפי השם, רק כשעוד לא נבחר סוג
+                        const guess = g.kind ? null : guessKind(g.name)
+                        return (
+                          guess && (
+                            <p className="whoami-auto kind-guess">
+                              נראה כמו {KINDS[guess.kind].label}, כי בשם כתוב "{guess.word}".{' '}
+                              <button type="button" className="link-btn" onClick={() => pickKind(g, guess.kind)}>
+                                לבחור {KINDS[guess.kind].label}
+                              </button>
+                            </p>
+                          )
+                        )
+                      })()}
                       <p className="muted">
                         {g.kind
                           ? KINDS[g.kind].describe

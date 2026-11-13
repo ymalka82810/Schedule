@@ -197,7 +197,7 @@ function keeps(o: DraftOption, sel: Selection, subjects: Map<string, Subject>): 
   return key === '' || key === chosen
 }
 
-const optionKey = (o: DraftOption) => `${o.name}|${o.teacher ?? ''}|${o.group ?? ''}|${o.room ?? ''}`
+const optionKey = (o: DraftOption) => `${o.name}|${o.teacher ?? ''}|${o.group ?? ''}|${o.room ?? ''}|${o.kind ?? ''}`
 const signature = (opts: DraftOption[]) => opts.map(optionKey).sort().join('#')
 
 /**

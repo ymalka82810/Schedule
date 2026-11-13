@@ -6,6 +6,7 @@ import { DAYS, DAY_NAMES, formatTime, fromTimeInput as fromInput, startOfWeek, t
 import type { DraftItem, DraftOption, DraftSchedule } from '../lib/pdf/draft'
 import { readScheduleFile } from '../lib/pdf/extract'
 import { dateFromFileName } from '../lib/pdf/parseSchedule'
+import { LESSON_KINDS } from '../lib/pdf/parseCell'
 import { fromBackup, toBackup } from '../lib/edit'
 import { changeKey, diffSchedules, hasImported, rejectChanges, type Change } from '../lib/diff'
 import { draftToData, validateDraft } from '../lib/pdf/toSchedule'
@@ -653,9 +654,25 @@ function ItemEditor({ item, highlighted, onChange, onOption, onRemoveOption, onA
                 onChange={(e) => onOption(k, { group: e.target.value || undefined })}
               />
             </label>
+            <label className="field">
+              <span>סוג</span>
+              <input
+                type="text"
+                list="lesson-kinds"
+                placeholder="הרצאה, תרגול…"
+                value={o.kind ?? ''}
+                onChange={(e) => onOption(k, { kind: e.target.value || undefined })}
+              />
+            </label>
           </div>
         </div>
       ))}
+
+      <datalist id="lesson-kinds">
+        {LESSON_KINDS.map((k) => (
+          <option key={k} value={k} />
+        ))}
+      </datalist>
 
       <button type="button" className="link-btn" onClick={onAddOption}>
         ＋ שיעור נוסף באותה שעה

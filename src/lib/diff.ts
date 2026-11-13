@@ -28,8 +28,8 @@ interface Row {
   ref: string
 }
 
-const lessonLabel = (l: Lesson) => {
-  const parts = [l.name, l.group, l.teacher].filter(Boolean)
+const lessonLabel = (l: Lesson, kind?: string) => {
+  const parts = [l.name, kind, l.group, l.teacher].filter(Boolean)
   return parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(', ')})` : parts[0]!
 }
 
@@ -39,12 +39,12 @@ function rows(data: ScheduleData): Row[] {
   for (const e of data.entries) {
     const l = lessons.get(e.lessonId)
     if (!l || l.personal) continue
-    out.push({ ...e.slot, label: lessonLabel(l), ref: e.id })
+    out.push({ ...e.slot, label: lessonLabel(l, e.kind), ref: e.id })
   }
   for (const g of data.choiceGroups) {
     const ls = g.optionLessonIds.map((id) => lessons.get(id)).filter((l): l is Lesson => !!l && !l.personal)
     if (!ls.length) continue
-    out.push({ ...g.slot, label: ls.map(lessonLabel).sort().join(' / '), ref: g.id })
+    out.push({ ...g.slot, label: ls.map((l) => lessonLabel(l, g.kinds?.[l.id])).sort().join(' / '), ref: g.id })
   }
   return out
 }
@@ -142,8 +142,12 @@ export function rejectChanges(before: ScheduleData, after: ScheduleData, rejecte
   for (const g of before.choiceGroups) {
     if (!restore.has(g.id)) continue
     const ids = g.optionLessonIds.map(lessonId)
+    const kinds = g.kinds
+      ? Object.fromEntries(g.optionLessonIds.flatMap((old, i) => (g.kinds![old] ? [[ids[i], g.kinds![old]]] : [])))
+      : undefined
     choiceGroups.push({
       ...g,
+      kinds,
       id: taken.has(g.id) ? fresh('kept') : g.id,
       optionLessonIds: ids,
       chosenLessonId: g.chosenLessonId ? lessonId(g.chosenLessonId) : null,

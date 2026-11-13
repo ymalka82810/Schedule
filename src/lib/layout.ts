@@ -105,6 +105,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
         name: l.group ? `${l.name} ${l.group}` : l.name,
         teacher: l.teacher,
         room: l.room,
+        kind: g.kinds?.[id],
         color: l.color,
         lane: i,
         lanes: ids.length,

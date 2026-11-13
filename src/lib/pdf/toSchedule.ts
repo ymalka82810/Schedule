@@ -68,9 +68,20 @@ export function draftToData(items: DraftItem[], base: ScheduleData, source?: Sou
     const slot = { day: item.day, start: item.start, end: item.end }
     const ids = options.map(lessonFor)
     if (ids.length === 1) {
-      entries.push({ id: item.id, slot, lessonId: ids[0] })
+      const kind = options[0].kind?.trim()
+      entries.push({ id: item.id, slot, lessonId: ids[0], ...(kind ? { kind } : {}) })
     } else {
-      choiceGroups.push({ id: item.id, slot, optionLessonIds: ids, chosenLessonId: chosenFrom(base, slot, ids, lessons) })
+      const kinds: Record<string, string> = {}
+      options.forEach((o, i) => {
+        if (o.kind?.trim()) kinds[ids[i]] = o.kind.trim()
+      })
+      choiceGroups.push({
+        id: item.id,
+        slot,
+        optionLessonIds: ids,
+        chosenLessonId: chosenFrom(base, slot, ids, lessons),
+        ...(Object.keys(kinds).length ? { kinds } : {}),
+      })
     }
   })
 

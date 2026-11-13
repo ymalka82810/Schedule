@@ -265,6 +265,20 @@ export function savePlanSettings(data: ScheduleData, plan: PlanSettings): Schedu
   return { ...data, plan }
 }
 
+/** סוג השיעור (הרצאה, תרגול, מעבדה) בשיבוצים האלה. ריק = בלי סוג */
+export function setEntryKind(data: ScheduleData, entryIds: string[], kind: string | undefined): ScheduleData {
+  const ids = new Set(entryIds)
+  const k = kind?.trim() || undefined
+  return {
+    ...data,
+    entries: data.entries.map((e) => {
+      if (!ids.has(e.id)) return e
+      const { kind: _old, ...rest } = e
+      return k ? { ...rest, kind: k } : rest
+    }),
+  }
+}
+
 // ---------- פעילות בכמה ימים ----------
 
 /** שיבוצים "אחים": אותו שיעור באותן שעות בימים אחרים. כך פעילות של כמה ימים נערכת כיחידה אחת */
@@ -272,7 +286,11 @@ export function siblings(data: ScheduleData, entryId: string): FixedEntry[] {
   const e = data.entries.find((x) => x.id === entryId)
   if (!e) return []
   return data.entries.filter(
-    (x) => x.lessonId === e.lessonId && x.slot.start === e.slot.start && x.slot.end === e.slot.end,
+    (x) =>
+      x.lessonId === e.lessonId &&
+      x.slot.start === e.slot.start &&
+      x.slot.end === e.slot.end &&
+      (x.kind ?? '') === (e.kind ?? ''),
   )
 }
 
@@ -297,6 +315,7 @@ export function setActivityDays(
   const group = siblings(data, entryId)
   if (!group.length) return data
   const lessonId = group[0].lessonId
+  const kind = group[0].kind
   const wanted = new Set(days)
   const kept = group.filter((e) => wanted.has(e.slot.day))
   const removed = new Set(group.filter((e) => !wanted.has(e.slot.day)).map((e) => e.id))
@@ -310,7 +329,7 @@ export function setActivityDays(
     if (have.has(day)) continue
     const id = newId('me', ids)
     ids.push(id)
-    entries = [...entries, { id, lessonId, slot: { day, start, end } }]
+    entries = [...entries, { id, lessonId, slot: { day, start, end }, ...(kind ? { kind } : {}) }]
   }
   return dropUnused({ ...data, entries })
 }

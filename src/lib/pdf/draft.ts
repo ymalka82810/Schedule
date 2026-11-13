@@ -8,6 +8,8 @@ export interface DraftOption {
   /** "קבוצה 1", "קבוצה 3" */
   group?: string
   room?: string
+  /** סוג השיעור כפי שכתוב בתא: הרצאה, תרגול, מעבדה */
+  kind?: string
   /** הערה על הקורס, למשל "קורס סמסטר א' בלבד" */
   note?: string
 }

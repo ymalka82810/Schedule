@@ -5,6 +5,7 @@ import {
   COLOR_NAMES,
   addActivity,
   setActivityDays,
+  setEntryKind,
   siblings,
   chooseOption,
   moveChoice,
@@ -22,6 +23,7 @@ import {
 import { DAYS, DAY_NAMES, dateOfDay, formatTime, fromTimeInput, startOfWeek, toTimeInput } from '../lib/time'
 import { moveOf } from '../lib/plan'
 import { DayPicker } from './DayPicker'
+import { LESSON_KINDS } from '../lib/pdf/parseCell'
 
 export type LessonTarget = Extract<BlockTarget, { kind: 'entry' | 'choice' | 'practice' }>
 export type LessonDialogMode = { kind: 'edit'; target: LessonTarget } | { kind: 'new'; day: DayIndex }
@@ -60,6 +62,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
       '',
   )
   const [color, setColor] = useState<ColorKey>(lesson?.color ?? 'cobalt')
+  const [kind, setKind] = useState(target?.kind === 'entry' ? (target.entry.kind ?? '') : '')
   const [validFrom, setValidFrom] = useState(lesson?.validFrom ?? '')
   const [validUntil, setValidUntil] = useState(lesson?.validUntil ?? '')
   const [slot, setSlot] = useState<Slot>(initialSlot)
@@ -118,6 +121,8 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
         validFrom: validFrom || undefined,
         validUntil: validUntil || undefined,
       })
+      // הסוג שייך לשיבוץ: לכל הימים של הפעילות, או רק לזה
+      next = setEntryKind(next, onlyThis ? [target.entry.id] : group.map((e) => e.id), kind)
       next = onlyThis
         ? moveEntry(next, target.entry.id, slot)
         : setActivityDays(next, target.entry.id, days, slot.start, slot.end)
@@ -201,6 +206,23 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
                 <label className="field">
                   <span>מרצה</span>
                   <input type="text" value={teacher} onChange={(e) => setTeacher(e.target.value)} />
+                </label>
+              )}
+              {target?.kind === 'entry' && (
+                <label className="field">
+                  <span>סוג (לא חובה)</span>
+                  <input
+                    type="text"
+                    list="lesson-kind-options"
+                    placeholder="הרצאה, תרגול, מעבדה"
+                    value={kind}
+                    onChange={(e) => setKind(e.target.value)}
+                  />
+                  <datalist id="lesson-kind-options">
+                    {LESSON_KINDS.map((k) => (
+                      <option key={k} value={k} />
+                    ))}
+                  </datalist>
                 </label>
               )}
               <label className="field">

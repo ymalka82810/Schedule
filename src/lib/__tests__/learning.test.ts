@@ -121,3 +121,22 @@ describe('כללים לפי סוג הלמידה', () => {
     expect(blocksOf(undefined, 120)).toBeNull()
   })
 })
+
+describe('ניחוש סוג למידה לפי השם', () => {
+  it('מזהה ידע, מיומנות ויצירה', async () => {
+    const { guessKind } = await import('../learning')
+    expect(guessKind('תרגול פיזיקה')).toEqual({ kind: 'skill', word: 'תרגול' })
+    expect(guessKind('אוצר מילים באנגלית')?.kind).toBe('knowledge')
+    expect(guessKind('תרגול אוצר מילים')?.kind).toBe('knowledge')
+    expect(guessKind('כתיבת הסיפור')?.kind).toBe('creative')
+    expect(guessKind('כתיבה')?.kind).toBe('creative')
+    expect(guessKind('נגינה בגיטרה')?.kind).toBe('skill')
+    expect(guessKind('והתרגול')?.kind).toBe('skill')
+  })
+
+  it('בלי רמז ברור, כמו אימון כושר, אין הצעה', async () => {
+    const { guessKind } = await import('../learning')
+    expect(guessKind('אימון כושר')).toBeNull()
+    expect(guessKind('יעד 1')).toBeNull()
+  })
+})

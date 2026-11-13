@@ -56,6 +56,8 @@ export interface ChoiceGroup {
   slot: Slot
   optionLessonIds: string[]
   chosenLessonId: string | null
+  /** סוג כל אפשרות (הרצאה / תרגול / מעבדה), לפי מזהה השיעור. רק לאפשרויות שיש להן סוג */
+  kinds?: Record<string, string>
 }
 
 /**

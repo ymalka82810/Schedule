@@ -162,8 +162,51 @@ export function roomFor(teacher: Teacher | undefined, subject: string, all: Teac
   return match?.room
 }
 
+/**
+ * סוגי שיעור שמזהים בתא: המילה עצמה וקיצורים נפוצים. כל השאר (סדנה, סמינר) נשאר חלק מהשם,
+ * כי לפעמים זה שם הקורס עצמו.
+ */
+const KIND_WORDS: Array<{ kind: string; re: string }> = [
+  { kind: 'הרצאה', re: "הרצאה|הרצאות|הרצ['\u05f3\u2019]" },
+  { kind: 'תרגול', re: "תרגול|תרגולים|תרגיל|תרג['\u05f3\u2019]" },
+  { kind: 'מעבדה', re: "מעבדה|מעבדות|מעב['\u05f3\u2019]" },
+]
+
+export const LESSON_KINDS = KIND_WORDS.map((k) => k.kind)
+
+/**
+ * מוצא בטקסט של שיעור את הסוג שלו (הרצאה, תרגול, מעבדה) ומוציא אותו מהשם:
+ * "פיזיקה תרגול" = פיזיקה, תרגול. "מעבדה בפיזיקה" = פיזיקה, מעבדה. "(תרג')" גם עובד.
+ * אם בלי המילה לא נשאר שם, המילה היא השם ואין סוג.
+ */
+export function detectKind(text: string): { rest: string; kind?: string } {
+  for (const { kind, re } of KIND_WORDS) {
+    // מילה שלמה: לפניה תחילת טקסט, רווח, מקף או סוגריים, ואחריה אותו דבר. ו' החיבור מותרת לפניה
+    const word = new RegExp(`(^|[\\s\\-\\u2013(,])ו?(?:${re})(?=$|[\\s\\-\\u2013),:])`)
+    const m = word.exec(text)
+    if (!m) continue
+    let rest = text.slice(0, m.index) + m[1] + ' ' + text.slice(m.index + m[0].length)
+    // "מעבדה בפיזיקה", "תרגול למתמטיקה": אות היחס שייכת למילת הסוג
+    const after = text.slice(m.index + m[0].length).match(/^\s+[בל]([\u05d0-\u05ea]{2,})/)
+    if (after) {
+      rest = text.slice(0, m.index) + m[1] + ' ' + after[1] + text.slice(m.index + m[0].length + after[0].length)
+    }
+    rest = rest
+      .replace(/\(\s*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!/[\u05d0-\u05eaA-Za-z]/.test(rest.replace(/[-\u2013,\s]/g, ''))) return { rest: text }
+    return { rest, kind }
+  }
+  return { rest: text }
+}
+
 function parsePart(part: string, teachers: Teacher[]): ParsedOption[] {
   let text = part
+
+  const detected = detectKind(text)
+  text = detected.rest
+  const kind = detected.kind
 
   // קבוצה: "קבוצה 1", "קב' 3", "קב 3"
   let group: string | undefined
@@ -194,9 +237,10 @@ function parsePart(part: string, teachers: Teacher[]): ParsedOption[] {
       teacher: t.fullName,
       group,
       room: roomFor(t, name, teachers),
+      ...(kind ? { kind } : {}),
     }))
   }
-  return [{ name, teacher: teacherText, group }]
+  return [{ name, teacher: teacherText, group, ...(kind ? { kind } : {}) }]
 }
 
 /** מפענח קטע טקסט אחד מתא: יכול להניב כמה אפשרויות (מקצועות במקביל, כמה מרצים) */

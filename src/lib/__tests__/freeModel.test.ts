@@ -164,11 +164,12 @@ describe('יעד עם תאריך יעד', () => {
   const g = goal({ id: 'p', name: 'פרויקט', totalHours: 12, deadline: '2026-11-26' })
 
   it('השעות מתחלקות שווה על ימי התכנון עד התאריך', () => {
-    // 15-26.11: 12 ימים, בלי שבת = 11 ימי תכנון, 6 מהם השבוע. 12 * 6 / 11 = 6.55, מעוגל למעלה לרבע שעה
+    // 15-26.11: 11 ימי תכנון בלי שבת; 26.11 הוא יום ביטחון, כך שנשארים 10, 6 מהם השבוע. 12 * 6 / 10 = 7.2 => 7.25
     const t = deadlineTarget(base(), g, WEEK)
-    expect(t.weekly).toBe(6.75)
+    expect(t.weekly).toBe(7.25)
+    expect(t.buffer).toBe('2026-11-26')
     const p = planWeek(base({}, { goals: [g] }), WEEK)
-    expect(p.report[0].min).toBe(h(7))
+    expect(p.report[0].min).toBe(h(7.5))
     expect(p.report[0].deadline).toMatchObject({ date: '2026-11-26', remainingHours: 12, passed: false })
   })
 
@@ -180,12 +181,37 @@ describe('יעד עם תאריך יעד', () => {
   })
 
   it('באמצע השבוע: מה שנשאר מתחלק מהיום והלאה', () => {
-    // מיום שלישי: 17-26.11 = 9 ימי תכנון, 4 מהם השבוע. 12 * 4 / 9 = 5.33 => 5.5
-    expect(deadlineTarget(base(), g, WEEK, '2026-11-17').weekly).toBe(5.5)
+    // מיום שלישי: 17-25.11 = 8 ימי תכנון (בלי יום הביטחון), 4 מהם השבוע. 12 * 4 / 8 = 6
+    expect(deadlineTarget(base(), g, WEEK, '2026-11-17').weekly).toBe(6)
   })
 
-  it('בשבוע של התאריך לא מתכננים אחריו', () => {
-    const p = planWeek(base({}, { goals: [g] }), new Date(2026, 10, 22))
-    expect(p.sessions.every((s) => s.day <= 4)).toBe(true)
+  it('בשבוע של התאריך לא מתכננים אחריו, ויום הביטחון נשאר פנוי כשיש מקום', () => {
+    // בשבוע הקודם תרגלתי 9 שעות, נשארו 3 על 4 ימים
+    const log = [{ id: 'x', goalId: 'p', date: '2026-11-18', start: h(9), end: h(18) }]
+    const p = planWeek(base({}, { goals: [g], log }), new Date(2026, 10, 22))
+    expect(p.report[0].planned).toBeGreaterThanOrEqual(h(3))
+    expect(p.sessions.every((s) => s.day <= 3)).toBe(true)
+  })
+
+  it('תאריך קרוב (פחות מ-4 ימים): בלי יום ביטחון', () => {
+    expect(deadlineTarget(base(), { ...g, deadline: '2026-11-17' }, WEEK).buffer).toBeUndefined()
+  })
+})
+
+describe('סוג השיעור בתכנון', () => {
+  it('לפני תרגול: לנסות לבד ולהגיע עם שאלות. אחרי הרצאה: לעבד באותו יום', () => {
+    const data: ScheduleData = {
+      ...emptyData,
+      lessons: [lesson('ph', 'פיזיקה')],
+      entries: [
+        { id: 'lec', lessonId: 'ph', kind: 'הרצאה', slot: { day: 0, start: h(9), end: h(11) } },
+        { id: 'tut', lessonId: 'ph', kind: 'תרגול', slot: { day: 2, start: h(9), end: h(10) } },
+      ],
+      plan: DEFAULT_PLAN,
+      goals: [goal({ id: 'g', name: 'תרגול פיזיקה', subject: 'פיזיקה', minHoursPerWeek: 2, maxHoursPerWeek: 2 })],
+    }
+    const reasons = planWeek(data, WEEK).sessions.flatMap((s) => s.reasons).join(' | ')
+    expect(reasons).toMatch(/לפני התרגול, ולהגיע עם שאלות/)
+    expect(reasons).toMatch(/עיבוד של ההרצאה באותו יום/)
   })
 })

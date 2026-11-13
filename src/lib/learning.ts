@@ -96,6 +96,8 @@ export interface LogDetails {
   rating?: Rating
   topic?: string
   stuck?: string
+  /** כמה דקות תרגלתי בפועל, אם שונה מהמתוכנן */
+  minutes?: Minutes
 }
 
 const clean = (s?: string) => s?.trim() || undefined
@@ -118,6 +120,9 @@ export function logSession(
     date,
     start: session.start,
     end: session.end,
+    ...(details.minutes && details.minutes > 0 && details.minutes !== session.end - session.start
+      ? { end: session.start + details.minutes, planned: session.end - session.start }
+      : {}),
     ...(details.rating ? { rating: details.rating } : {}),
     ...(clean(details.topic) ? { topic: clean(details.topic) } : {}),
     ...(clean(details.stuck) ? { stuck: clean(details.stuck) } : {}),
@@ -234,4 +239,24 @@ export function guessKind(name: string): { kind: GoalKind; word: string } | null
     }
   }
   return null
+}
+
+/**
+ * אורך מפגש שמתאים למה שקורה בפועל: אם בשלושה מפגשים אחרונים (או יותר) תרגלתי הרבה פחות או יותר מהמתוכנן,
+ * מציעים אורך חדש לפי החציון, מעוגל ל-5 דקות. null = אין מספיק נתונים או שהאורך מתאים.
+ */
+export function suggestLength(data: ScheduleData, goal: Goal): { minutes: Minutes; from: number } | null {
+  const recent = (data.log ?? [])
+    .filter((l) => l.goalId === goal.id && !l.reviewId)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.start - a.start)
+    .slice(0, 5)
+  if (recent.length < 3) return null
+  const actual = recent.map((l) => l.end - l.start).sort((a, b) => a - b)
+  const median = actual[Math.floor(actual.length / 2)]
+  const planned = sessionLength(goal)
+  const ratio = median / planned
+  if (ratio >= 0.8 && ratio <= 1.25) return null
+  const minutes = Math.max(15, Math.min(180, Math.round(median / 5) * 5))
+  if (minutes === planned) return null
+  return { minutes, from: recent.length }
 }

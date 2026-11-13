@@ -39,6 +39,8 @@ export interface Busy {
   kind: 'lesson' | 'event'
   /** שמות המקצועות בשיבוץ: אחד, או כל האפשרויות במשבצת בחירה שעוד לא נבחרה */
   names?: string[]
+  /** סוג השיעור לכל שם (הרצאה / תרגול / מעבדה), באותו סדר */
+  kinds?: (string | undefined)[]
 }
 
 /** זמן שהתכנון שומר בצד: נסיעה למוסד וממנו, ושגרות כמו ארוחות ותפילות */
@@ -88,7 +90,7 @@ export interface GoalReport {
   reviews: number
   reviewsDone: number
   /** יעד עם תאריך יעד: כמה שעות נשארו בתחילת השבוע, ועד מתי */
-  deadline?: { date: string; remainingHours: number; passed: boolean }
+  deadline?: { date: string; remainingHours: number; passed: boolean; buffer?: string }
   /** מפגשים שהוזזו כדי לפנות מקום ליעד הזה */
   rearranged?: number
   /** דקות שתוכננו לזמן שעבר ולא סומנו */
@@ -170,7 +172,7 @@ export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
     const { date, moved: _m, ...slot } = placeOf(data, e.id, e.slot, weekStart)
     if (isCancelled(data, e.id, date) || !activeOn(lessons.get(e.lessonId), date)) continue
     const name = lessons.get(e.lessonId)?.name ?? ''
-    out.push({ ...slot, label: name, kind: 'lesson', names: [name] })
+    out.push({ ...slot, label: name, kind: 'lesson', names: [name], kinds: [e.kind] })
   }
   for (const g of data.choiceGroups) {
     const { date, moved: _m, ...slot } = placeOf(data, g.id, g.slot, weekStart)
@@ -180,7 +182,7 @@ export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
     )
     if (!ids.length) continue
     const names = ids.map((id) => lessons.get(id)?.name ?? '')
-    out.push({ ...slot, label: names.join(' / '), kind: 'lesson', names })
+    out.push({ ...slot, label: names.join(' / '), kind: 'lesson', names, kinds: ids.map((id) => g.kinds?.[id]) })
   }
   for (const ev of data.events) {
     const day = DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === ev.date)
@@ -295,6 +297,11 @@ export function freeTime(
 const sameName = (a: string, b: string) => a.trim() === b.trim() || sameSubject(a, b)
 /** האם בשיבוץ לומדים את המקצוע (במשבצת בחירה שלא נבחרה: אחת האפשרויות) */
 const teaches = (b: Busy, subject: string) => (b.names ?? [b.label]).some((n) => sameName(n, subject))
+/** סוג השיעור במקצוע הזה בשיבוץ, אם ידוע */
+const lessonKindOf = (b: Busy, subject: string) => {
+  const i = (b.names ?? [b.label]).findIndex((n) => sameName(n, subject))
+  return i >= 0 ? b.kinds?.[i] : undefined
+}
 const start9 = (t: Minutes) => t < 9 * 60
 
 interface Candidate {
@@ -313,7 +320,7 @@ export function deadlineTarget(
   g: Goal,
   weekStart: Date,
   today?: string,
-): { weekly: number; remaining: Minutes; passed: boolean } {
+): { weekly: number; remaining: Minutes; passed: boolean; buffer?: string } {
   const s = planSettings(data)
   const first = dateOfDay(weekStart, 0)
   const logged = (data.log ?? []).filter((l) => l.goalId === g.id)
@@ -326,23 +333,24 @@ export function deadlineTarget(
   const from = today && today > first ? today : first
   const doneThisWeek = minutes(logged.filter((l) => l.date >= first && l.date < from))
   const left = Math.max(0, remaining - doneThisWeek)
-  // ימי תכנון מ-from ועד התאריך, וכמה מהם בשבוע הזה
+  // ימי תכנון מ-from ועד התאריך
   const last = dateOfDay(weekStart, 6)
-  let total = 0
-  let thisWeek = 0
+  const days: string[] = []
   for (let i = 0; i < 3660; i++) {
     const date = dateOfDay(weekStart, i)
     if (date > deadline) break
     if (date < from) continue
     const dow = (i % 7) as DayIndex
     if (s.offDays.includes(dow) || isChag(date)) continue
-    total++
-    if (date <= last) thisWeek++
+    days.push(date)
   }
-  if (!total) return { weekly: doneThisWeek / 60, remaining, passed }
+  if (!days.length) return { weekly: doneThisWeek / 60, remaining, passed }
+  // יום ביטחון: כשיש מספיק ימים, מתכננים לסיים יום לפני התאריך. בלת"מ לא יפיל את ההגשה
+  const buffer = days.length >= 4 ? days.pop() : undefined
+  const thisWeek = days.filter((d) => d <= last).length
   // מעגלים כלפי מעלה לרבע שעה, כדי לא להישאר מאחור
-  const weekly = Math.ceil(((doneThisWeek + (left * thisWeek) / total) / 60) * 4) / 4
-  return { weekly, remaining, passed }
+  const weekly = Math.ceil(((doneThisWeek + (left * thisWeek) / days.length) / 60) * 4) / 4
+  return { weekly, remaining, passed, ...(buffer ? { buffer } : {}) }
 }
 
 /**
@@ -537,18 +545,43 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
       const before = lessonsByDay[day].filter((l) => teaches(l, sub) && l.end <= start)
       const tomorrow = lessonsByDay[(day + 1) % 7].filter((l) => teaches(l, sub))
       const laterToday = lessonsByDay[day].filter((l) => teaches(l, sub) && l.start >= end)
+      /** "שיעור", "הרצאה", "תרגול" */
+      const what = (b: Busy) => lessonKindOf(b, sub) ?? 'שיעור'
+      // לפני תרגול או מעבדה: לנסות לבד קודם, כדי להגיע עם שאלות. אחרי הרצאה: לעבד את החומר בזמן שהוא טרי
+      const prepBonus = (b: Busy) => {
+        const k = lessonKindOf(b, sub)
+        if (k === 'תרגול') return { sc: 2, why: 'כדאי לנסות תרגילים לבד לפני התרגול, ולהגיע עם שאלות' }
+        if (k === 'מעבדה') return { sc: 2, why: 'כדאי לקרוא את הניסוי לפני המעבדה' }
+        return null
+      }
       if (before.length) {
         const last = before[before.length - 1]
         // חזרה בזמן שהחומר טרי: ככל שקרוב יותר לשיעור, טוב יותר
         sc += start - last.end <= 4 * 60 ? 4 : 2
-        reasons.push(`חזרה אחרי שיעור ${sub} שנגמר ב-${formatTime(last.end)}`)
+        reasons.push(`חזרה אחרי ${what(last)} ב${sub} שנגמר${what(last) === 'שיעור' ? '' : 'ה'} ב-${formatTime(last.end)}`)
+        // אחרי תרגול כבר תרגלת: עדיף להתכונן לפני התרגול מאשר לחזור עליו
+        if (lessonKindOf(last, sub) === 'תרגול') sc -= 2
+        if (lessonKindOf(last, sub) === 'הרצאה') {
+          sc += 1
+          reasons.push('עיבוד של ההרצאה באותו יום, לפני שהחומר נשכח')
+        }
       } else if (laterToday.length) {
         sc += 2
-        reasons.push(`הכנה לשיעור ${sub} ב-${formatTime(laterToday[0].start)}`)
+        reasons.push(`הכנה ל${what(laterToday[0])} ב${sub} ב-${formatTime(laterToday[0].start)}`)
+        const prep = prepBonus(laterToday[0])
+        if (prep) {
+          sc += prep.sc
+          reasons.push(prep.why)
+        }
       }
       if (tomorrow.length && day !== 6) {
         sc += 3
-        reasons.push(`הכנה לשיעור ${sub} מחר (${DAY_NAMES[(day + 1) % 7]})`)
+        reasons.push(`הכנה ל${what(tomorrow[0])} ב${sub} מחר (${DAY_NAMES[(day + 1) % 7]})`)
+        const prep = prepBonus(tomorrow[0])
+        if (prep && !reasons.includes(prep.why)) {
+          sc += prep.sc
+          reasons.push(prep.why)
+        }
       }
       // יום בלי שיעור במקצוע ובלי שיעור מחר: עדיין אפשרי, אבל פחות שימושי
     }
@@ -586,8 +619,12 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     if (load > 6 * 60) sc -= (load - 6 * 60) / 120
     else if (lessonMinutes[day] === 0 && dayLoad(day) === 0) sc += 0.5
 
-    // תאריך יעד: ככל שקרוב יותר לתאריך, פחות מרווח לטעויות. עדיף מוקדם
+    // תאריך יעד: ככל שקרוב יותר לתאריך, פחות מרווח לטעויות. עדיף מוקדם, ויום הביטחון רק אם אין ברירה
     if (dl) sc -= day * 0.2
+    if (dl?.buffer === weekDateList[day]) {
+      sc -= 6
+      reasons.push('יום הביטחון לפני תאריך היעד: רק כי לא נמצא מקום אחר')
+    }
 
     if (pref.avoided) reasons.push('בדרך כלל אתה מזיז מכאן, אבל לא נמצא מקום מתאים יותר')
     return { day, start, score: sc, reasons: [...reasons, ...learn.reasons] }
@@ -770,6 +807,7 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
               date: g.deadline!,
               remainingHours: deadlines.get(g.id)!.remaining / 60,
               passed: deadlines.get(g.id)!.passed,
+              buffer: deadlines.get(g.id)!.buffer,
             },
           }
         : {}),

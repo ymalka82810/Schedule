@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { DayIndex, Minutes } from '../types'
 import type { Block } from '../lib/layout'
 import { DAY_NAMES, addDays, formatTime, isoDate, minutesOfDay } from '../lib/time'
@@ -20,7 +21,17 @@ const duration = (m: Minutes) => {
   return `${h}:${String(min).padStart(2, '0')} שעות`
 }
 
-const live = (b: Block) => !b.isCancelled
+const live = (b: Block) => !b.isCancelled && !b.isMissed
+
+/** שורה בכרטיס: בלוק רגיל נפתח בלחיצה, שגרה (ארוחה, תפילה) רק מוצגת */
+function Row({ b, onOpen, children }: { b: Block; onOpen: (id: string) => void; children: ReactNode }) {
+  if (b.type === 'reserved') return <div className={`today-row is-routine c-${b.color}`}>{children}</div>
+  return (
+    <button type="button" className={`today-row c-${b.color}`} onClick={() => onOpen(b.id)}>
+      {children}
+    </button>
+  )
+}
 
 /** שם לתצוגה של כמה בלוקים באותה שעה (משבצת בחירה) */
 const nameOf = (list: Block[]) => (list.length > 1 ? list.map((b) => b.name).join(' / ') : list[0].name)
@@ -43,7 +54,8 @@ export function Today({ blocks, nextWeekBlocks, now, onOpen }: Props) {
       const date = addDays(now, i)
       const d = date.getDay() as DayIndex
       const pool = d > day ? blocks : nextWeekBlocks
-      const list = pool.filter((b) => b.day === d && live(b)).sort((a, b) => a.start - b.start)
+      // ביום אחר: הדבר הראשון שהוא לא שגרה
+      const list = pool.filter((b) => b.day === d && live(b) && b.type !== 'reserved').sort((a, b) => a.start - b.start)
       if (list.length) later = { list: list.filter((b) => b.start === list[0].start), date }
     }
   }
@@ -55,7 +67,7 @@ export function Today({ blocks, nextWeekBlocks, now, onOpen }: Props) {
       {holiday && <p className="today-holiday">היום {holiday.name}</p>}
 
       {current.length > 0 && (
-        <button type="button" className={`today-row c-${current[0].color}`} onClick={() => onOpen(current[0].id)}>
+        <Row b={current[0]} onOpen={onOpen}>
           <span className="today-label">עכשיו</span>
           <span className="today-what">
             {nameOf(current)}
@@ -64,7 +76,7 @@ export function Today({ blocks, nextWeekBlocks, now, onOpen }: Props) {
           <span className="today-when">
             עד <bdi dir="ltr">{formatTime(current[0].end)}</bdi>, נשארו {duration(current[0].end - nowMin)}
           </span>
-        </button>
+        </Row>
       )}
 
       {!current.length && next.length > 0 && (
@@ -74,7 +86,7 @@ export function Today({ blocks, nextWeekBlocks, now, onOpen }: Props) {
       )}
 
       {next.length > 0 && (
-        <button type="button" className={`today-row c-${next[0].color}`} onClick={() => onOpen(next[0].id)}>
+        <Row b={next[0]} onOpen={onOpen}>
           <span className="today-label">{current.length ? 'אחר כך' : 'הבא'}</span>
           <span className="today-what">
             {nameOf(next)}
@@ -83,12 +95,12 @@ export function Today({ blocks, nextWeekBlocks, now, onOpen }: Props) {
           <span className="today-when">
             ב-<bdi dir="ltr">{formatTime(next[0].start)}</bdi>, בעוד {duration(next[0].start - nowMin)}
           </span>
-        </button>
+        </Row>
       )}
 
       {!current.length && !next.length && (
         <p className="today-free">
-          {today.length ? 'סיימת להיום.' : 'היום אין שיעורים.'}
+          {today.some((b) => b.type !== 'reserved') ? 'סיימת להיום.' : 'היום אין שיעורים.'}
           {later &&
             ` הבא: ${nameOf(later.list)}, ${
               isoDate(later.date) === isoDate(addDays(now, 1)) ? 'מחר' : `ביום ${DAY_NAMES[later.date.getDay()]}`

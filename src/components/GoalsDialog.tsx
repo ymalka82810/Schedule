@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { DayIndex, Goal, GoalKind, PlanSettings, ScheduleData } from '../types'
-import { KINDS, blocksOf, guessKind, removeReview, sessionLength } from '../lib/learning'
+import { KINDS, blocksOf, guessKind, removeReview, sessionLength, suggestLength } from '../lib/learning'
 import { removeGoal, saveGoal, savePlanSettings } from '../lib/edit'
 import { DEFAULT_MAX_LOAD, planSettings, planWeek, subjectNames } from '../lib/plan'
 import { RoutinesEditor } from './RoutinesEditor'
@@ -116,7 +116,7 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                       ? `תאריך היעד (${dm(r.deadline.date)}) עבר.`
                       : r.deadline.remainingHours <= 0
                         ? 'הגעת לסך השעות. כל הכבוד!'
-                        : `נשארו ${hours(r.deadline.remainingHours * 60)} שעות עד ${dm(r.deadline.date)}, ומתחלקות שווה על הימים שנותרו.`}
+                        : `נשארו ${hours(r.deadline.remainingHours * 60)} שעות עד ${dm(r.deadline.date)}, ומתחלקות שווה על הימים שנותרו.${r.deadline.buffer ? ` התכנון מכוון לסיים קודם, ומשאיר את ${dm(r.deadline.buffer)} כיום ביטחון.` : ''}`}
                   </p>
                 )}
                 {!!r?.missed && (
@@ -302,6 +302,18 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                         </select>
                       </label>
                     </div>
+                    {(() => {
+                      const sug = suggestLength(draft, g)
+                      return sug ? (
+                        <p className="whoami-auto">
+                          ב-{sug.from} המפגשים האחרונים תרגלת בדרך כלל כ-{sug.minutes} דקות, ולא {sessionLength(g)}. מפגש באורך
+                          שבאמת קורה עדיף על תוכנית שלא עומדים בה.{' '}
+                          <button type="button" className="link-btn" onClick={() => updateGoal(g, { sessionMinutes: sug.minutes })}>
+                            לקבוע {sug.minutes} דקות
+                          </button>
+                        </p>
+                      ) : null
+                    })()}
                     {(() => {
                       const b = blocksOf(g.kind, sessionLength(g))
                       return b ? (

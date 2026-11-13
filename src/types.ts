@@ -201,6 +201,8 @@ export interface PracticeLog {
   stuck?: string
   /** המפגש היה חזרה על נושא (מזהה החזרה) */
   reviewId?: string
+  /** כמה דקות היה מתוכנן, כשתרגלתי זמן אחר (end - start הוא מה שתרגלתי בפועל) */
+  planned?: Minutes
   /** החזרה כפי שהייתה לפני הסימון, כדי שביטול הסימון יחזיר אותה */
   reviewBefore?: Review
 }

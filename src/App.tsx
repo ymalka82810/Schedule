@@ -109,12 +109,17 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   // לכרטיס "היום": תמיד השבוע של היום והשבוע שאחריו, בלי קשר לשבוע המוצג
   const thisWeek = useMemo(() => startOfWeek(now), [now])
   const todayBlocks = useMemo(
-    () => buildBlocks(data, { weekStart: thisWeek, plan: planWeek(data, thisWeek, todayIso, nowMin).sessions }),
+    () => {
+      const p = planWeek(data, thisWeek, todayIso, nowMin)
+      // בכרטיס "היום" גם הארוחה או התפילה הבאה, בלי הנסיעות
+      return buildBlocks(data, { weekStart: thisWeek, plan: p.sessions, reserved: p.reserved.filter((r) => r.kind === 'routine') })
+    },
     [data, thisWeek, todayIso, nowMin],
   )
   const nextWeekBlocks = useMemo(() => {
     const w = addDays(thisWeek, 7)
-    return buildBlocks(data, { weekStart: w, plan: planWeek(data, w, todayIso, nowMin).sessions })
+    const p = planWeek(data, w, todayIso, nowMin)
+    return buildBlocks(data, { weekStart: w, plan: p.sessions, reserved: p.reserved.filter((r) => r.kind === 'routine') })
   }, [data, thisWeek, todayIso, nowMin])
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
   const isEmpty = blocks.length === 0

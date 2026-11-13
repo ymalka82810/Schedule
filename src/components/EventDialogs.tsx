@@ -231,6 +231,7 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
   const [rating, setRating] = useState<Rating | undefined>()
   const [topic, setTopic] = useState('')
   const [stuck, setStuck] = useState('')
+  const [minutes, setMinutes] = useState(session.end - session.start)
   const review = session.reviewId ? (data.reviews ?? []).find((r) => r.id === session.reviewId) : undefined
   const logged = session.logId ? (data.log ?? []).find((l) => l.id === session.logId) : undefined
   const isReview = !!session.reviewId
@@ -241,7 +242,7 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
 
   const save = () => {
     if (review) onSave(logReview(data, review, session, date, { rating: rating ?? 'ok', stuck }))
-    else onSave(logSession(data, session, date, { rating, topic, stuck }))
+    else onSave(logSession(data, session, date, { rating, topic, stuck, minutes }))
   }
 
   /** מה יקרה עם החזרה הבאה, לפי הדירוג שנבחר */
@@ -306,9 +307,14 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
               <p className="muted">
                 {isReview ? 'סימנת שחזרת.' : 'סימנת שתרגלת. המפגש נשאר במקומו, ושאר השבוע מתוכנן סביבו.'}
               </p>
-              {logged && (logged.rating || logged.topic || logged.stuck) && (
+              {logged && (logged.rating || logged.topic || logged.stuck || logged.planned) && (
                 <ul className="whoami-conflicts">
                   {logged.rating && <li>הרגיש: {RATING_LABEL[logged.rating]}</li>}
+                  {logged.planned && (
+                    <li>
+                      תרגלת {logged.end - logged.start} דקות (תוכננו {logged.planned})
+                    </li>
+                  )}
                   {logged.topic && !isReview && <li>נושא: {logged.topic}</li>}
                   {logged.stuck && <li>נתקעתי ב: {logged.stuck}</li>}
                 </ul>
@@ -337,6 +343,19 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} />
                 </label>
               )}
+              {!isReview && (
+                <label className="field goal-narrow">
+                  <span>כמה דקות תרגלתי בפועל</span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={300}
+                    step={5}
+                    value={minutes}
+                    onChange={(e) => setMinutes(Math.max(5, Number(e.target.value) || 5))}
+                  />
+                </label>
+              )}
               <label className="field">
                 <span>איפה נתקעתי</span>
                 <input type="text" value={stuck} onChange={(e) => setStuck(e.target.value)} />
@@ -345,10 +364,13 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
             </fieldset>
           )}
 
-          {!session.done && !isReview && (
+          {session.missed && (
+            <p className="whoami-auto">הזמן של המפגש עבר ולא סומן. אם תרגלת בכל זאת, סמן כאן; אחרת התכנון כבר השלים אותו בהמשך השבוע.</p>
+          )}
+          {!session.done && !isReview && !session.missed && (
             <p className="muted">המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.</p>
           )}
-          {!session.done && (
+          {!session.done && !session.missed && (
             <p className="muted">
               אפשר לגרור את המפגש בלוח לשעה אחרת (בטלפון: לחיצה ארוכה). כשאותה הזזה חוזרת פעמיים, התכנון לומד את ההעדפה.
             </p>
@@ -365,7 +387,7 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
                 {isReview ? 'חזרתי ✓' : 'תרגלתי ✓'}
               </button>
             )}
-            {!session.done && (
+            {!session.done && !session.missed && (
               <button
                 type="button"
                 className="btn"

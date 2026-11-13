@@ -1674,3 +1674,8 @@ body.is-dragging * {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.today-row.is-routine {
+  cursor: default;
+  opacity: 0.85;
+}

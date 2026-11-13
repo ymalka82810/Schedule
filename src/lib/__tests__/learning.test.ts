@@ -140,3 +140,17 @@ describe('ניחוש סוג למידה לפי השם', () => {
     expect(guessKind('יעד 1')).toBeNull()
   })
 })
+
+describe('אורך מפגש לפי מה שקורה בפועל', () => {
+  it('שלושה מפגשים קצרים מהמתוכנן מציעים אורך חדש, וסימון שומר את הזמן בפועל', async () => {
+    const { logSession, suggestLength } = await import('../learning')
+    const g = goal({ id: 'g', name: 'קריאה', sessionMinutes: 60 })
+    let data = withGoals(g)
+    for (const date of ['2026-11-15', '2026-11-16', '2026-11-17']) {
+      data = logSession(data, { goalId: 'g', start: 600, end: 660 }, date, { minutes: 35 })
+    }
+    expect(data.log![0]).toMatchObject({ end: 635, planned: 60 })
+    expect(suggestLength(data, g)).toEqual({ minutes: 35, from: 3 })
+    expect(suggestLength(withGoals(g), g)).toBeNull()
+  })
+})

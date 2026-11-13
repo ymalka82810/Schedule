@@ -370,7 +370,7 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${canDrag ? ' is-draggable' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
                     style={style}
                     {...click}
                     {...dragProps}
@@ -380,7 +380,7 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                     {b.isCancelled && <span className="block-tag">{b.cancelTag ?? 'בוטל השבוע'}</span>}
                     {b.type === 'event' && <span className="block-tag">{b.cancelTag ?? 'אירוע'}</span>}
                     {b.type === 'plan' && (
-                      <span className="block-tag">{b.isDone ? 'בוצע ✓' : b.isMoved ? 'הוזז' : 'מתוכנן'}</span>
+                      <span className="block-tag">{b.isDone ? 'בוצע ✓' : b.isMissed ? 'פוספס' : b.isMoved ? 'הוזז' : 'מתוכנן'}</span>
                     )}
                     {b.isMoved && b.type !== 'plan' && !b.isCancelled && <span className="block-tag">הוזז השבוע</span>}
                     <h3 className="block-name">{b.name}</h3>

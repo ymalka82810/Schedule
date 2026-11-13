@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import type { DayIndex, Goal, GoalKind, PlanSettings, ScheduleData } from '../types'
 import { KINDS, blocksOf, guessKind, removeReview, sessionLength } from '../lib/learning'
 import { removeGoal, saveGoal, savePlanSettings } from '../lib/edit'
-import { planSettings, planWeek, subjectNames } from '../lib/plan'
-import { DAYS, DAY_NAMES, fromTimeInput, toTimeInput } from '../lib/time'
+import { DEFAULT_MAX_LOAD, planSettings, planWeek, subjectNames } from '../lib/plan'
+import { RoutinesEditor } from './RoutinesEditor'
+import { DAYS, DAY_NAMES, addDays, dateOfDay, fromTimeInput, isoDate, toTimeInput } from '../lib/time'
 import { Swatches } from './Swatches'
 import { DayPicker } from './DayPicker'
 import { useEscape } from './useEscape'
@@ -42,6 +43,8 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
   const settings = planSettings(draft)
   const subjects = useMemo(() => subjectNames(draft.lessons), [draft.lessons])
   const prefs = useMemo(() => learnedPrefs(draft), [draft])
+  const day0 = today ?? dateOfDay(weekStart, 0)
+  const dm = (iso: string) => `${Number(iso.slice(8))}.${Number(iso.slice(5, 7))}`
 
   const updateGoal = (g: Goal, patch: Partial<Goal>) => setDraft((d) => saveGoal(d, { ...g, ...patch }))
   /** בחירת סוג למידה: גם אורך המפגש ומספר המפגשים ביום מתאימים את עצמם לסוג */
@@ -107,6 +110,24 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                   </span>
                 </button>
                 {r?.boost && <p className="whoami-auto">{r.boost}: התרגול השבוע גדל פי 1.5.</p>}
+                {r?.deadline && (
+                  <p className="whoami-auto">
+                    {r.deadline.passed
+                      ? `תאריך היעד (${dm(r.deadline.date)}) עבר.`
+                      : r.deadline.remainingHours <= 0
+                        ? 'הגעת לסך השעות. כל הכבוד!'
+                        : `נשארו ${hours(r.deadline.remainingHours * 60)} שעות עד ${dm(r.deadline.date)}, ומתחלקות שווה על הימים שנותרו.`}
+                  </p>
+                )}
+                {!!r?.missed && (
+                  <p className="muted">
+                    {hours(r.missed)} שעות שתוכננו לזמן שעבר לא סומנו. התכנון השלים אותן בהמשך השבוע; אם תרגלת בכל זאת,
+                    לחץ על המפגש בלוח וסמן.
+                  </p>
+                )}
+                {!!r?.rearranged && (
+                  <p className="muted">כדי שהיעד יגיע למינימום, התכנון הזיז {r.rearranged === 1 ? 'מפגש אחד' : `${r.rearranged} מפגשים`} של יעדים אחרים.</p>
+                )}
                 {short && (
                   <p className="import-error">
                     חסרות {hours(r.min - r.planned)} שעות: אין מספיק זמן פנוי מתאים. אפשר להקטין את היעד, לקצר מפגשים או
@@ -169,6 +190,62 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                         ))}
                       </select>
                     </label>
+                    <fieldset className="kind-pick">
+                      <legend>כמה זמן</legend>
+                      <div className="whoami-chips">
+                        <label className="chip">
+                          <input
+                            type="radio"
+                            name={`mode-${g.id}`}
+                            checked={!g.deadline}
+                            onChange={() => updateGoal(g, { deadline: undefined, totalHours: undefined })}
+                          />
+                          <span>שעות בכל שבוע</span>
+                        </label>
+                        <label className="chip">
+                          <input
+                            type="radio"
+                            name={`mode-${g.id}`}
+                            checked={!!g.deadline}
+                            onChange={() =>
+                              updateGoal(g, {
+                                deadline: isoDate(addDays(new Date(`${day0}T00:00:00`), 30)),
+                                totalHours: g.totalHours ?? Math.max(1, g.minHoursPerWeek * 4),
+                              })
+                            }
+                          />
+                          <span>סך שעות עד תאריך</span>
+                        </label>
+                      </div>
+                      {g.deadline && (
+                        <p className="muted">
+                          לעבודה, פרויקט או הכנה למבחן: מה שנשאר מתחלק שווה על הימים עד התאריך, ומתעדכן לפי מה שסימנת.
+                        </p>
+                      )}
+                    </fieldset>
+                    {g.deadline ? (
+                      <div className="edit-row">
+                        <label className="field">
+                          <span>סך הכול שעות</span>
+                          <input
+                            type="number"
+                            min={0.5}
+                            max={500}
+                            step={0.5}
+                            value={g.totalHours ?? 0}
+                            onChange={(e) => updateGoal(g, { totalHours: Math.max(0.5, Number(e.target.value) || 0.5) })}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>עד תאריך (כולל)</span>
+                          <input
+                            type="date"
+                            value={g.deadline}
+                            onChange={(e) => e.target.value && updateGoal(g, { deadline: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                    ) : (
                     <div className="edit-row">
                       <label className="field">
                         <span>מינימום שעות בשבוע</span>
@@ -196,6 +273,7 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                         />
                       </label>
                     </div>
+                    )}
                     <div className="edit-row">
                       <label className="field">
                         <span>אורך מפגש</span>
@@ -389,7 +467,34 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                   onChange={(e) => setPlan({ maxHoursPerDay: Math.max(1, Number(e.target.value) || 1) })}
                 />
               </label>
+              <label className="field">
+                <span>שעות ביום בסך הכול (שיעורים ותרגול)</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={16}
+                  value={settings.maxLoadPerDay ?? DEFAULT_MAX_LOAD}
+                  onChange={(e) => setPlan({ maxLoadPerDay: Math.min(16, Math.max(2, Number(e.target.value) || DEFAULT_MAX_LOAD)) })}
+                />
+              </label>
+              <label className="field">
+                <span>נסיעה למוסד (לכל כיוון)</span>
+                <select
+                  value={settings.travelMinutes ?? 0}
+                  onChange={(e) => setPlan({ travelMinutes: Number(e.target.value) })}
+                >
+                  {[0, 10, 15, 20, 30, 45, 60, 75, 90].map((m) => (
+                    <option key={m} value={m}>
+                      {m ? `${m} דקות` : 'בלי'}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
+            <p className="muted">
+              ביום עמוס בשיעורים התכנון שם פחות תרגול. הנסיעה נשמרת לפני השיעור הראשון ואחרי האחרון; בין שיעורים נשארים
+              במוסד.
+            </p>
             <label className="import-filter">
               <input
                 type="checkbox"
@@ -455,6 +560,8 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
               ))}
             </div>
           </fieldset>
+
+          <RoutinesEditor settings={settings} setPlan={setPlan} date={day0} />
         </div>
 
         <footer className="dialog-foot">

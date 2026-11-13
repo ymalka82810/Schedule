@@ -89,8 +89,13 @@ export default function App({ initialData, initialBackup, account, onPersist, in
 
   // התכנון של הזמן הפנוי מחושב מחדש לכל שבוע: אירועים וביטולים משנים אותו
   const todayIso = isoDate(now)
-  const plan = useMemo(() => planWeek(data, weekStart, todayIso), [data, weekStart, todayIso])
-  const blocks = useMemo(() => buildBlocks(data, { weekStart, plan: plan.sessions }), [data, weekStart, plan])
+  // עכשיו, ברבעי שעה: מה שעבר לא מתוכנן, ומה שפוספס עובר להמשך. התכנון מתעדכן כל רבע שעה
+  const nowMin = Math.floor((now.getHours() * 60 + now.getMinutes()) / 15) * 15
+  const plan = useMemo(() => planWeek(data, weekStart, todayIso, nowMin), [data, weekStart, todayIso, nowMin])
+  const blocks = useMemo(
+    () => buildBlocks(data, { weekStart, plan: plan.sessions, reserved: plan.reserved }),
+    [data, weekStart, plan],
+  )
 
   const dayNotes = useMemo(() => {
     const out: Partial<Record<DayIndex, string>> = {}
@@ -104,13 +109,13 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   // לכרטיס "היום": תמיד השבוע של היום והשבוע שאחריו, בלי קשר לשבוע המוצג
   const thisWeek = useMemo(() => startOfWeek(now), [now])
   const todayBlocks = useMemo(
-    () => buildBlocks(data, { weekStart: thisWeek, plan: planWeek(data, thisWeek, todayIso).sessions }),
-    [data, thisWeek, todayIso],
+    () => buildBlocks(data, { weekStart: thisWeek, plan: planWeek(data, thisWeek, todayIso, nowMin).sessions }),
+    [data, thisWeek, todayIso, nowMin],
   )
   const nextWeekBlocks = useMemo(() => {
     const w = addDays(thisWeek, 7)
-    return buildBlocks(data, { weekStart: w, plan: planWeek(data, w, todayIso).sessions })
-  }, [data, thisWeek, todayIso])
+    return buildBlocks(data, { weekStart: w, plan: planWeek(data, w, todayIso, nowMin).sessions })
+  }, [data, thisWeek, todayIso, nowMin])
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
   const isEmpty = blocks.length === 0
   const versionDays = useMemo(() => versionAge(data, todayIso), [data, todayIso])
@@ -176,7 +181,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const openBlock = (blockId: string) => openBlockIn(blockId, weekStart)
 
   function openBlockIn(blockId: string, week: Date) {
-    const sessions = week === weekStart ? plan.sessions : planWeek(data, week, todayIso).sessions
+    const sessions = week === weekStart ? plan.sessions : planWeek(data, week, todayIso, nowMin).sessions
     const target = resolveBlock(data, blockId, sessions)
     if (!target) return
     if (target.kind === 'event') setDialog({ kind: 'event', event: target.event })

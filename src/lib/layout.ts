@@ -1,5 +1,5 @@
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
-import { activeOn, breakOn, isCancelled, placeOf, type PlannedSession } from './plan'
+import { activeOn, breakOn, isCancelled, placeOf, type PlannedSession, type Reserved } from './plan'
 import type { Slot } from '../types'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
@@ -22,7 +22,9 @@ export interface Block {
   isOption: boolean
   /** חלון תרגול חופשי שהתוכן שלו עוד לא נקבע */
   isOpen: boolean
-  type: 'lesson' | 'choice' | 'practice' | 'event' | 'plan'
+  type: 'lesson' | 'choice' | 'practice' | 'event' | 'plan' | 'reserved'
+  /** מפגש מתוכנן שהזמן שלו עבר ולא סומן */
+  isMissed?: boolean
   /** בוטל בשבוע המוצג. מוצג חיוור, כדי שאפשר יהיה להחזיר */
   isCancelled?: boolean
   /** למה בוטל: "בוטל השבוע" או שם החג */
@@ -40,6 +42,8 @@ interface WeekOptions {
   weekStart?: Date
   /** המפגשים שתוכננו לשבוע, ושמות היעדים וצבעיהם */
   plan?: PlannedSession[]
+  /** נסיעות ושגרות (ארוחות, תפילות) שהתכנון שמר */
+  reserved?: Reserved[]
 }
 
 /** הופך את הנתונים השמורים לרשימת בלוקים לציור */
@@ -181,8 +185,25 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOpen: false,
       type: 'plan',
       isDone: p.done || undefined,
+      isMissed: p.missed || undefined,
       isMoved: !!p.pinId || undefined,
-      draggable: !p.done,
+      draggable: !p.done && !p.missed,
+    })
+  }
+
+  for (const r of opts.reserved ?? []) {
+    blocks.push({
+      id: `reserved-${r.kind}-${r.day}-${r.start}`,
+      day: r.day,
+      start: r.start,
+      end: r.end,
+      name: r.label,
+      color: 'slate',
+      lane: 0,
+      lanes: 1,
+      isOption: false,
+      isOpen: false,
+      type: 'reserved',
     })
   }
 
@@ -234,6 +255,8 @@ export function conflictsOf(blocks: Block[], g: { id: string; day: DayIndex; sta
       b.id.split(':')[0] !== group &&
       !b.isCancelled &&
       b.type !== 'practice' &&
+      b.type !== 'reserved' &&
+      !b.isMissed &&
       b.start < g.start + g.len &&
       g.start < b.end,
   )

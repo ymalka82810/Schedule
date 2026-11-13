@@ -254,7 +254,10 @@ export function saveGoal(data: ScheduleData, goal: Omit<Goal, 'id'> & { id?: str
     return { ...data, goals: data.goals.map((g) => (g.id === goal.id ? { ...g, ...goal, id: g.id } : g)) }
   }
   const id = newId('goal', data.goals.map((g) => g.id))
-  return { ...data, goals: [...data.goals, { ...goal, id }] }
+  // מתי נוצר: מה שהיה מתוכנן לפני כן לא נחשב פספוס
+  const d = new Date()
+  const since = goal.since ?? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { ...data, goals: [...data.goals, { ...goal, id, since }] }
 }
 
 export function removeGoal(data: ScheduleData, id: string): ScheduleData {

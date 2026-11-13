@@ -99,6 +99,15 @@ export interface Goal {
   sessionMinutes?: number
   /** לשבץ קודם בחלונות התרגול (כמו מיגו) */
   preferPractice?: boolean
+  /**
+   * יעד עם תאריך יעד: סך השעות עד התאריך (כולל), במקום שעות קבועות בשבוע.
+   * בכל שבוע המערכת מחשבת כמה נשאר ומחלקת שווה על הימים שנותרו
+   */
+  totalHours?: number
+  /** YYYY-MM-DD */
+  deadline?: string
+  /** YYYY-MM-DD: מתי היעד נוצר. מפגשים שהיו מתוכננים לפני כן לא נחשבים פספוס */
+  since?: string
   /** כמה מפגשים לכל היותר ביום. ברירת מחדל 1 */
   maxPerDay?: number
   /** רק בימים האלה. חסר או ריק = כל יום שמותר לתכנן בו */
@@ -228,6 +237,33 @@ export interface PlanSettings {
   /** השעות שבהן אני חד: למידה קשה מושמת שם, ותרגול קל בשעות העייפות. חסר = אין העדפה */
   sharpFrom?: Minutes
   sharpTo?: Minutes
+  /** זמן הגעה למוסד: לפני השיעור הראשון ביום ואחרי האחרון. חסר = 0 */
+  travelMinutes?: Minutes
+  /** כמה שעות ביום לכל היותר, שיעורים ותרגול יחד. חסר = 10 */
+  maxLoadPerDay?: number
+  /** עיר לחישוב זמני היום (לתפילות). שם באנגלית כמו ב-hebcal, חסר = Jerusalem */
+  location?: string
+  /** זמנים קבועים שהתכנון שומר פנויים: ארוחות, תפילות */
+  routines?: Routine[]
+}
+
+/** זמני היום שאפשר לעגן אליהם שגרה */
+export type Zman = 'alot' | 'sunrise' | 'chatzot' | 'minchaGedola' | 'minchaKetana' | 'plag' | 'sunset' | 'tzeit'
+
+/** שעה קבועה, או זמן מזמני היום עם הזזה בדקות (שלילי = לפני) */
+export type TimeRef = { at: Minutes } | { zman: Zman; offset: Minutes }
+
+/**
+ * שגרה: משהו שצריך X דקות בתוך חלון זמן, בימים מסוימים (ארוחת צהריים בין 12:00 ל-14:30, מנחה לפני השקיעה).
+ * התכנון שומר לה מקום בחלון, ליד השיעורים אם אפשר, ולא משבץ שם תרגול.
+ */
+export interface Routine {
+  id: string
+  name: string
+  days: DayIndex[]
+  from: TimeRef
+  to: TimeRef
+  minutes: Minutes
 }
 
 /** אירוע חד-פעמי, שייך לתאריך מסוים ולא למערכת הקבועה (שלב 3) */

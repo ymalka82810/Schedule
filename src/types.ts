@@ -312,6 +312,8 @@ export interface Grade {
   date: string
   kind: 'exam' | 'self'
   score: number
+  /** נושא בתוך המקצוע (וקטורים, נגזרות). מאפשר להמליץ גם על איזה נושא לתרגל */
+  topic?: string
   note?: string
 }
 
@@ -357,6 +359,8 @@ export interface ScheduleData {
   semesters?: Partial<Record<SemesterKey, DateRange>>
   /** ציונים והערכות עצמיות, שמהם נקבעת העדיפות בין המקצועות */
   grades?: Grade[]
+  /** YYYY-MM-DD (ראשון של השבוע): לא להזכיר הערכה עצמית לשבוע הזה */
+  selfRemindSkip?: string
   /** חופשות: אין שיעורים, אבל מתכננים כרגיל */
   breaks?: Break[]
   /** מפגשי תרגול שסומנו כבוצעו */

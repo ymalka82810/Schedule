@@ -7,7 +7,7 @@ import { INTERVALS, KINDS, MAX_REVIEWS_PER_DAY, REVIEW_MINUTES, intervalText, ma
 import { learnedPrefs, prefScore } from './prefs'
 import { validRange } from './semester'
 import { allGoals } from './suggest'
-import { needFactor, priorities, priorityOf, type SubjectPriority } from './priority'
+import { needFactor, priorities, priorityOf, weakTopics, type SubjectPriority } from './priority'
 import type { Slot } from '../types'
 
 /**
@@ -899,6 +899,21 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
   }
 
   sessions.sort((a, b) => a.day - b.day || a.start - b.start)
+
+  // נושאים חלשים לפי הציונים: כל מפגש של המקצוע מקבל נושא להתמקד בו, ברוטציה מהחלש ביותר
+  for (const g of goals) {
+    if (!g.subject) continue
+    const weak = weakTopics(data, g.subject, asOf)
+    if (!weak.length) continue
+    sessions
+      .filter((x) => x.goalId === g.id && !x.reviewId && !x.done)
+      .forEach((x, i) => {
+        const t = weak[i % weak.length]
+        x.title = `${g.name}: ${t.topic}`
+        x.reasons = [...x.reasons, `במה להתמקד: ${t.topic} (${t.reason})`]
+      })
+  }
+
   const all = [...sessions, ...missed].sort((a, b) => a.day - b.day || a.start - b.start)
   return {
     sessions: all,

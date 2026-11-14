@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { ScheduleData } from '../types'
 import { attendedSubjects } from '../lib/suggest'
-import { gradeText, needFactor, priorities, removeGrade, saveGrade, setWeeklySelf } from '../lib/priority'
+import { gradeText, knownTopics, needFactor, priorities, removeGrade, saveGrade, setWeeklySelf, weakTopics } from '../lib/priority'
+import { ProgressChart } from './ProgressChart'
+import type { ColorKey } from '../types'
 import { sameSubject } from '../lib/pdf/parseCell'
 import { addDays, dateOfDay, formatWeekRange, startOfWeek } from '../lib/time'
 import { useEscape } from './useEscape'
@@ -10,6 +12,8 @@ interface Props {
   data: ScheduleData
   /** YYYY-MM-DD */
   today: string
+  /** לפתוח על השבוע הזה בהערכה העצמית (מהתזכורת) */
+  initialWeek?: Date
   onSave: (data: ScheduleData) => void
   onClose: () => void
 }
@@ -23,13 +27,13 @@ const toDate = (iso: string) => new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1,
  * ציונים והערכה עצמית, גם לשבועות שעברו. מהם המערכת קובעת עדיפות בין המקצועות:
  * כמה תרגול אוטומטי, ומה נכנס קודם לחלונות התרגול החופשי
  */
-export function GradesDialog({ data, today, onSave, onClose }: Props) {
+export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Props) {
   useEscape(onClose)
   const [draft, setDraft] = useState(data)
   const subjects = useMemo(() => attendedSubjects(draft), [draft])
   const prio = useMemo(() => priorities(draft, today), [draft, today])
   // הערכה עצמית: ברירת המחדל היא השבוע של היום (במוצאי שבת, השבוע שנגמר עכשיו)
-  const [week, setWeek] = useState(() => startOfWeek(toDate(today)))
+  const [week, setWeek] = useState(() => initialWeek ?? startOfWeek(toDate(today)))
   const weekDates = [0, 1, 2, 3, 4, 5, 6].map((d) => dateOfDay(week, d))
   const isFuture = weekDates[0] > today
   const selfOf = (subject: string) =>
@@ -39,17 +43,29 @@ export function GradesDialog({ data, today, onSave, onClose }: Props) {
   const [date, setDate] = useState(today)
   const [score, setScore] = useState('')
   const [note, setNote] = useState('')
+  const [topic, setTopic] = useState('')
   const [error, setError] = useState<string | null>(null)
   const addExam = () => {
     const n = Number(score)
     if (!subject) return setError('צריך לבחור מקצוע.')
     if (score.trim() === '' || !Number.isFinite(n) || n < 0 || n > 100) return setError('הציון צריך להיות בין 0 ל-100.')
     if (date > today) return setError('אי אפשר להזין ציון לתאריך שעוד לא הגיע.')
-    setDraft((d) => saveGrade(d, { subject, date, kind: 'exam', score: n, note: note.trim() || undefined }))
+    setDraft((d) =>
+      saveGrade(d, { subject, date, kind: 'exam', score: n, topic: topic.trim() || undefined, note: note.trim() || undefined }),
+    )
     setScore('')
     setNote('')
+    setTopic('')
     setError(null)
   }
+  // גרף לכל מקצוע שיש לו ציונים, בצבע של המקצוע בלוח
+  const charts = subjects
+    .map((sub) => ({
+      subject: sub,
+      color: (draft.lessons.find((l) => sameSubject(l.name, sub))?.color ?? 'slate') as ColorKey,
+      grades: (draft.grades ?? []).filter((g) => sameSubject(g.subject, sub)),
+    }))
+    .filter((c) => c.grades.length > 0)
   const exams = (draft.grades ?? []).filter((g) => g.kind === 'exam').sort((a, b) => b.date.localeCompare(a.date))
 
   return (
@@ -85,19 +101,45 @@ export function GradesDialog({ data, today, onSave, onClose }: Props) {
                       </span>
                       <div className="muted">
                         {p.reason}.{' '}
-                        {pct === 0 ? 'תרגול רגיל' : (
-                          <>
-                            תרגול אוטומטי <bdi dir="ltr">{pct > 0 ? `+${pct}%` : `${pct}%`}</bdi>
-                          </>
-                        )}
+                        {pct === 0 ? 'תרגול רגיל' : `התרגול האוטומטי ${pct > 0 ? 'גדל' : 'קטן'} ב-${Math.abs(pct)}%`}
                         {i === 0 && p.need >= 0.4 ? ', ראשון בחלונות התרגול החופשי' : ''}
                       </div>
+                      {weakTopics(draft, p.subject, today).length > 0 && (
+                        <div className="muted">
+                          נושאים לחזק: {weakTopics(draft, p.subject, today).map((t) => t.topic).join(', ')}
+                        </div>
+                      )}
                     </li>
                   )
                 })}
               </ol>
             )}
           </fieldset>
+
+          {charts.length > 0 && (
+            <fieldset className="whoami-set">
+              <legend>התקדמות</legend>
+              <div className="pc-key muted" aria-hidden="true">
+                <span>
+                  <svg width="12" height="12">
+                    <circle cx="6" cy="6" r="4.5" style={{ fill: 'var(--muted)' }} />
+                  </svg>{' '}
+                  מבחן או בוחן
+                </span>
+                <span>
+                  <svg width="12" height="12">
+                    <circle cx="6" cy="6" r="4" style={{ fill: 'none', stroke: 'var(--muted)', strokeWidth: 2 }} />
+                  </svg>{' '}
+                  הערכה עצמית (1 = 0, 5 = 100)
+                </span>
+              </div>
+              <div className="progress-charts">
+                {charts.map((c) => (
+                  <ProgressChart key={c.subject} subject={c.subject} color={c.color} grades={c.grades} today={today} />
+                ))}
+              </div>
+            </fieldset>
+          )}
 
           <fieldset className="whoami-set">
             <legend>הערכה עצמית לשבוע</legend>
@@ -170,7 +212,16 @@ export function GradesDialog({ data, today, onSave, onClose }: Props) {
               </label>
             </div>
             <label className="field">
-              <span>הערה (לא חובה), למשל "בוחן על וקטורים"</span>
+              <span>נושא (לא חובה), למשל "וקטורים". מנושא חלש המערכת תמליץ במה להתמקד בתרגול</span>
+              <input type="text" list="grade-topics" value={topic} onChange={(e) => setTopic(e.target.value)} />
+              <datalist id="grade-topics">
+                {knownTopics(draft, subject).map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </label>
+            <label className="field">
+              <span>הערה (לא חובה)</span>
               <input type="text" value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
             {error && <p className="import-error">{error}</p>}
@@ -182,7 +233,8 @@ export function GradesDialog({ data, today, onSave, onClose }: Props) {
                 {exams.map((g) => (
                   <li key={g.id}>
                     <span>
-                      {g.subject}: {gradeText(g)} <span className="muted">({dm(g.date)}{g.note ? `, ${g.note}` : ''})</span>
+                      {g.subject}{g.topic ? ` · ${g.topic}` : ''}: {gradeText(g)}{' '}
+                      <span className="muted">({dm(g.date)}{g.note ? `, ${g.note}` : ''})</span>
                     </span>
                     <button type="button" className="link-btn" onClick={() => setDraft((d) => removeGrade(d, g.id))}>
                       מחיקה

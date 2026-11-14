@@ -1737,3 +1737,72 @@ body.is-dragging * {
   gap: 0.5rem;
   margin-block-end: 0.5rem;
 }
+
+/* גרף התקדמות במקצוע */
+.progress-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+.progress-chart {
+  margin: 0;
+}
+.progress-chart figcaption {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-block-end: 0.25rem;
+}
+.progress-chart svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.pc-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.pc-normal {
+  stroke: var(--muted, #6b7385);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.pc-axis {
+  font-size: 10px;
+  fill: var(--muted, #6b7385);
+}
+.pc-value {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+.pc-line {
+  fill: none;
+  stroke: var(--hue);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.pc-dot {
+  fill: var(--hue);
+  stroke: var(--surface, var(--paper));
+  stroke-width: 2;
+}
+.pc-dot.is-self {
+  fill: var(--surface, var(--paper));
+  stroke: var(--hue);
+}
+.pc-hit {
+  fill: transparent;
+  cursor: default;
+}
+.pc-point:hover .pc-dot {
+  r: 6.5;
+}
+.pc-key {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+}
+.pc-key svg {
+  vertical-align: middle;
+}

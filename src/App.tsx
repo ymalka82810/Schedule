@@ -6,6 +6,8 @@ import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { EventDialog, SessionDialog } from './components/EventDialogs'
 import { GoalsDialog } from './components/GoalsDialog'
 import { GradesDialog } from './components/GradesDialog'
+import { selfReminder } from './lib/priority'
+import { attendedSubjects } from './lib/suggest'
 import { Today } from './components/Today'
 import { activeWeek, breakOn, isWorkDay, planSettings, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
@@ -38,7 +40,7 @@ type Dialog =
   | { kind: 'event'; event: OneOffEvent | { date: string } }
   | { kind: 'session'; session: PlannedSession; goal: Goal }
   | { kind: 'goals' }
-  | { kind: 'grades' }
+  | { kind: 'grades'; week?: Date }
   | {
       kind: 'move'
       target: BlockTarget
@@ -127,6 +129,8 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const range = useMemo(() => visibleRange(data, blocks), [data, blocks])
   const isEmpty = blocks.length === 0
   const versionDays = useMemo(() => versionAge(data, todayIso), [data, todayIso])
+  // תזכורת להערכה עצמית בסוף השבוע (או בתחילת הבא), כשחסרה למקצוע שאני לומד
+  const selfDue = useMemo(() => selfReminder(data, now, attendedSubjects(data)), [data, now])
 
   const current = activeWeek(data, now)
   const isThisWeek = isSameDay(weekStart, current.weekStart)
@@ -374,6 +378,27 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         </p>
       )}
 
+      {selfDue && (
+        <section className="mode-note version-note" aria-label="תזכורת להערכה עצמית">
+          <p>
+            איך היה השבוע ({formatWeekRange(selfDue.weekStart)})? חסרה הערכה עצמית: {selfDue.missing.join(', ')}. חצי דקה,
+            והתכנון של השבוע הבא יתעדף לפיה.
+          </p>
+          <div className="import-actions">
+            <button type="button" className="btn" onClick={() => setDialog({ kind: 'grades', week: selfDue.weekStart })}>
+              להעריך עכשיו
+            </button>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => commit({ ...data, selfRemindSkip: isoDate(selfDue.weekStart) }, backup, 'לא אזכיר על השבוע הזה')}
+            >
+              לא השבוע
+            </button>
+          </div>
+        </section>
+      )}
+
       {versionDays !== null && (
         <section className="mode-note version-note" aria-label="תזכורת לגרסה חדשה">
           <p>
@@ -502,7 +527,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       )}
 
       {dialog?.kind === 'grades' && (
-        <GradesDialog data={data} today={todayIso} onSave={handleEdit} onClose={() => setDialog(null)} />
+        <GradesDialog data={data} today={todayIso} initialWeek={dialog.week} onSave={handleEdit} onClose={() => setDialog(null)} />
       )}
 
       {toast && history.length > 0 && (

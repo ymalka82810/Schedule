@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { initialData } from '../../data/initial'
 import { planWeek } from '../plan'
 import { addPracticeWindows } from '../edit'
-import { needFactor, priorities, saveGrade, setWeeklySelf } from '../priority'
+import { needFactor, priorities, saveGrade, selfReminder, setWeeklySelf, weakTopics } from '../priority'
 import { attendedSubjects, autoGoalId } from '../suggest'
 import type { ScheduleData } from '../../types'
 
@@ -69,5 +69,43 @@ describe('התכנון לפי העדיפות', () => {
     const inside = planWeek(d, WEEK).sessions.filter((x) => x.day === 0 && x.start >= 20 * 60 && x.end <= 21 * 60)
     expect(inside.length).toBeGreaterThan(0)
     expect(inside[0].reasons[0]).toContain('תרגול חופשי')
+  })
+})
+
+describe('נושאים בתוך מקצוע', () => {
+  const withTopics = (list: [string, number, string][]): ScheduleData =>
+    list.reduce((d, [topic, score, date]) => saveGrade(d, { subject: B, topic, score, date, kind: 'exam' }), initialData)
+
+  it('נושא חלש מזוהה, ונושא חזק לא', () => {
+    const d = withTopics([['וקטורים', 50, '2026-11-10'], ['תנועה', 92, '2026-11-11']])
+    expect(weakTopics(d, B, '2026-11-14').map((t) => t.topic)).toEqual(['וקטורים'])
+  })
+
+  it('מפגשי התרגול של המקצוע מקבלים נושא להתמקד בו, ברוטציה בין הנושאים החלשים', () => {
+    const d = withTopics([['וקטורים', 50, '2026-11-10'], ['כוחות', 60, '2026-11-11']])
+    const s = planWeek(d, WEEK).sessions.filter((x) => x.goalId === autoGoalId(B))
+    expect(s.length).toBeGreaterThan(1)
+    expect(s[0].title).toContain('וקטורים')
+    expect(s[1].title).toContain('כוחות')
+    expect(s[0].reasons.join(' ')).toContain('במה להתמקד')
+  })
+})
+
+describe('תזכורת להערכה עצמית', () => {
+  it('מחמישי אחר הצהריים על השבוע הנוכחי, בראשון על השבוע שעבר, ובאמצע השבוע לא', () => {
+    expect(selfReminder(initialData, new Date(2026, 10, 12, 18), subjects)?.weekStart.getDate()).toBe(8)
+    expect(selfReminder(initialData, new Date(2026, 10, 12, 10), subjects)).toBeNull()
+    expect(selfReminder(initialData, new Date(2026, 10, 15, 10), subjects)?.weekStart.getDate()).toBe(8)
+    expect(selfReminder(initialData, new Date(2026, 10, 17, 10), subjects)).toBeNull()
+  })
+
+  it('נעלמת כשכל המקצועות הוערכו, או אחרי "לא השבוע"', () => {
+    const week = ['2026-11-08', '2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14']
+    const now = new Date(2026, 10, 14, 21)
+    const some = setWeeklySelf(initialData, A, week, 3)
+    expect(selfReminder(some, now, subjects)?.missing).not.toContain(A)
+    const all = subjects.reduce((d, s) => setWeeklySelf(d, s, week, 3), initialData)
+    expect(selfReminder(all, now, subjects)).toBeNull()
+    expect(selfReminder({ ...initialData, selfRemindSkip: '2026-11-08' }, now, subjects)).toBeNull()
   })
 })

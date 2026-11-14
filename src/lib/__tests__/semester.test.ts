@@ -83,3 +83,22 @@ describe('תקרה לחזרות ביום', () => {
     expect(late[0].reasons.join(' ')).toContain(`כבר היו שם ${MAX_REVIEWS_PER_DAY} חזרות`)
   })
 })
+
+describe('השבוע שהאתר נפתח עליו', () => {
+  it('במוצאי שבת: השבוע הבא, מיום ראשון', async () => {
+    const { activeWeek } = await import('../plan')
+    const r = activeWeek(initialData, new Date(2026, 10, 14, 21, 0))
+    expect(r.weekStart.getDate()).toBe(15)
+    expect(r.day).toBe(0)
+  })
+  it('ביום חמישי: השבוע הנוכחי והיום', async () => {
+    const { activeWeek } = await import('../plan')
+    const r = activeWeek(initialData, new Date(2026, 10, 12, 21, 0))
+    expect(r.weekStart.getDate()).toBe(8)
+    expect(r.day).toBe(4)
+  })
+  it('בשישי אחרי שעת הסיום: השבוע הבא', async () => {
+    const { activeWeek } = await import('../plan')
+    expect(activeWeek(initialData, new Date(2026, 10, 13, 14, 0)).weekStart.getDate()).toBe(15)
+  })
+})

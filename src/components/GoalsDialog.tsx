@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { DayIndex, Goal, GoalKind, PlanSettings, ScheduleData } from '../types'
 import { KINDS, blocksOf, guessKind, removeReview, sessionLength, suggestLength } from '../lib/learning'
 import { removeGoal, saveGoal, savePlanSettings } from '../lib/edit'
-import { DEFAULT_MAX_LOAD, planSettings, planWeek, subjectNames } from '../lib/plan'
+import { DEFAULT_MAX_LOAD, activeWeek, planSettings, planWeek, subjectNames } from '../lib/plan'
 import { RoutinesEditor } from './RoutinesEditor'
 import { DAYS, DAY_NAMES, addDays, dateOfDay, fromTimeInput, isoDate, toTimeInput } from '../lib/time'
 import { Swatches } from './Swatches'
@@ -40,6 +40,9 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
   const [draft, setDraft] = useState(data)
   const [openId, setOpenId] = useState<string | null>(null)
   const plan = useMemo(() => planWeek(draft, weekStart, today), [draft, weekStart, today])
+  // שבוע שכבר אין בו זמן לתכנן (מוצאי שבת): חוסר שעות הוא לא בעיה של היעד
+  const [openedAt] = useState(() => new Date())
+  const weekOver = activeWeek(draft, openedAt).weekStart.getTime() > weekStart.getTime()
   const settings = planSettings(draft)
   const subjects = useMemo(() => subjectNames(draft.lessons), [draft.lessons])
   const prefs = useMemo(() => learnedPrefs(draft), [draft])
@@ -128,7 +131,10 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                 {!!r?.rearranged && (
                   <p className="muted">כדי שהיעד יגיע למינימום, התכנון הזיז {r.rearranged === 1 ? 'מפגש אחד' : `${r.rearranged} מפגשים`} של יעדים אחרים.</p>
                 )}
-                {short && (
+                {short && weekOver && (
+                  <p className="muted">השבוע הזה כבר נגמר, ולא מתכננים לזמן שעבר. בשבוע הבא היעד ישובץ כרגיל.</p>
+                )}
+                {short && !weekOver && (
                   <p className="import-error">
                     חסרות {hours(r.min - r.planned)} שעות: אין מספיק זמן פנוי מתאים. אפשר להקטין את היעד, לקצר מפגשים או
                     לאפשר יותר מפגש אחד ביום.

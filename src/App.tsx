@@ -6,7 +6,7 @@ import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { EventDialog, SessionDialog } from './components/EventDialogs'
 import { GoalsDialog } from './components/GoalsDialog'
 import { Today } from './components/Today'
-import { breakOn, planWeek, type PlannedSession } from './lib/plan'
+import { activeWeek, breakOn, isWorkDay, planSettings, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
 import { LoginDialog } from './components/LoginDialog'
 import {
@@ -73,8 +73,9 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const [offlineEdits, setOfflineEdits] = useState(account.kind === 'offline' && !!account.pending)
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [now, setNow] = useState(() => new Date())
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
-  const [selectedDay, setSelectedDay] = useState<DayIndex>(() => new Date().getDay() as DayIndex)
+  // במוצאי שבת (או כשהשבוע כבר נגמר לתכנון) נפתחים על השבוע הבא
+  const [weekStart, setWeekStart] = useState(() => activeWeek(data, new Date()).weekStart)
+  const [selectedDay, setSelectedDay] = useState<DayIndex>(() => activeWeek(data, new Date()).day)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -125,11 +126,16 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const isEmpty = blocks.length === 0
   const versionDays = useMemo(() => versionAge(data, todayIso), [data, todayIso])
 
-  const isThisWeek = isSameDay(weekStart, startOfWeek(now))
+  const current = activeWeek(data, now)
+  const isThisWeek = isSameDay(weekStart, current.weekStart)
   const goToThisWeek = () => {
-    setWeekStart(startOfWeek(now))
-    setSelectedDay(now.getDay() as DayIndex)
+    setWeekStart(current.weekStart)
+    setSelectedDay(current.day)
   }
+  // שיעור חדש לא נפתח על שבת: ביום בלי תכנון מציעים את יום הלימודים הראשון
+  const newDay: DayIndex = isWorkDay(planSettings(data), selectedDay)
+    ? selectedDay
+    : (([0, 1, 2, 3, 4, 5, 6] as DayIndex[]).find((d) => isWorkDay(planSettings(data), d)) ?? selectedDay)
 
   /** כל שינוי בנתונים עובר כאן: מתעדכן בזיכרון, ואצל הבעלים גם נשמר בשרת */
   const commit = (next: ScheduleData, nextBackup: ScheduleData | null, label = 'השינוי נשמר') => {
@@ -298,7 +304,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: selectedDay } })}
+            onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: newDay } })}
           >
             ＋ שיעור או פעילות
           </button>
@@ -405,7 +411,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
             <button
               type="button"
               className="btn"
-              onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: selectedDay } })}
+              onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: newDay } })}
             >
               הוספת שיעור
             </button>

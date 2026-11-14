@@ -28,6 +28,29 @@ export const DEFAULT_PLAN: PlanSettings = {
 
 export const planSettings = (data: ScheduleData): PlanSettings => ({ ...DEFAULT_PLAN, ...data.plan })
 
+/** יום שאפשר לתכנן בו (לא שבת וכד') */
+export const isWorkDay = (s: PlanSettings, day: DayIndex) => !s.offDays.includes(day)
+
+/**
+ * השבוע שהאתר נפתח עליו: השבוע הנוכחי, או הבא כשבנוכחי כבר לא נשאר זמן לתכנן
+ * (למשל במוצאי שבת, או בשישי אחרי שעת הסיום). אחרת נפתח לוח של שבוע שנגמר, בלי שום מפגש מתוכנן
+ */
+export function activeWeek(data: ScheduleData, now: Date): { weekStart: Date; day: DayIndex } {
+  const s = planSettings(data)
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
+  const today = now.getDay() as DayIndex
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  for (let d = today; d <= 6; d++) {
+    const day = d as DayIndex
+    if (!isWorkDay(s, day)) continue
+    const end = day === 5 && s.fridayEnd !== null ? s.fridayEnd : s.dayEnd
+    if (day > today || nowMin < end) return { weekStart: start, day: today }
+  }
+  const next = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+  const first = ([0, 1, 2, 3, 4, 5, 6] as DayIndex[]).find((d) => isWorkDay(s, d)) ?? 0
+  return { weekStart: next, day: first }
+}
+
 /** ברירת מחדל לעומס יומי כולל: שיעורים ותרגול יחד */
 export const DEFAULT_MAX_LOAD = 10
 

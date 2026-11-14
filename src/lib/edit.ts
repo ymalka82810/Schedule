@@ -1,3 +1,4 @@
+import { allGoals } from './suggest'
 import type {
   Break,
   ChoiceGroup,
@@ -46,7 +47,7 @@ export function resolveBlock(data: ScheduleData, blockId: string, plan: PlannedS
   if (event) return { kind: 'event', event }
   const session = plan.find((p) => p.id === blockId)
   if (session) {
-    const goal = data.goals.find((g) => g.id === session.goalId)
+    const goal = allGoals(data).find((g) => g.id === session.goalId)
     return goal ? { kind: 'plan', session, goal } : null
   }
   const entry = data.entries.find((e) => e.id === blockId)
@@ -252,6 +253,11 @@ export function removeBreak(data: ScheduleData, id: string): ScheduleData {
 export function saveGoal(data: ScheduleData, goal: Omit<Goal, 'id'> & { id?: string }): ScheduleData {
   if (goal.id && data.goals.some((g) => g.id === goal.id)) {
     return { ...data, goals: data.goals.map((g) => (g.id === goal.id ? { ...g, ...goal, id: g.id } : g)) }
+  }
+  // יעד אוטומטי שמשנים אותו נשמר כיעד רגיל עם אותו מזהה, כדי שהסימונים וההזזות שלו יישארו מחוברים
+  if (goal.id?.startsWith('auto-')) {
+    const { auto: _a, ...rest } = goal
+    return { ...data, goals: [...data.goals, { ...rest, id: goal.id }] }
   }
   const id = newId('goal', data.goals.map((g) => g.id))
   // מתי נוצר: מה שהיה מתוכנן לפני כן לא נחשב פספוס

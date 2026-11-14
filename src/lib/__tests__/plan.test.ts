@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// הבדיקות כאן בודקות יעדים שהוגדרו בלבד. התרגול האוטומטי לכל מקצוע נבדק ב-suggest.test.ts
+vi.mock('../suggest', async (orig) => ({
+  ...(await orig<typeof import('../suggest')>()),
+  allGoals: (d: { goals: unknown[] }) => d.goals,
+}))
 import { initialData } from '../../data/initial'
 import { DEFAULT_PLAN, busyForWeek, freeTime, planWeek } from '../plan'
 import type { Goal, ScheduleData } from '../../types'

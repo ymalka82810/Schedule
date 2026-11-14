@@ -1,3 +1,4 @@
+import { allGoals } from './suggest'
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
 import { activeOn, breakOn, isCancelled, placeOf, type PlannedSession, type Reserved } from './plan'
 import type { Slot } from '../types'
@@ -168,7 +169,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
     }
   }
 
-  const goals = new Map(data.goals.map((g) => [g.id, g]))
+  const goals = new Map(allGoals(data).map((g) => [g.id, g]))
   for (const p of opts.plan ?? []) {
     const g = goals.get(p.goalId)
     if (!g) continue

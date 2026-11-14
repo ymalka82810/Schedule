@@ -1679,3 +1679,11 @@ body.is-dragging * {
   cursor: default;
   opacity: 0.85;
 }
+
+/* הצעות ליעדים מהמקצועות */
+.suggest-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}

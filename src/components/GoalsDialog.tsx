@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { DayIndex, Goal, GoalKind, PlanSettings, ScheduleData } from '../types'
+import { allGoals } from '../lib/suggest'
 import { KINDS, blocksOf, guessKind, removeReview, sessionLength, suggestLength } from '../lib/learning'
 import { removeGoal, saveGoal, savePlanSettings } from '../lib/edit'
 import { DEFAULT_MAX_LOAD, activeWeek, planSettings, planWeek, subjectNames } from '../lib/plan'
@@ -53,6 +54,10 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
   /** בחירת סוג למידה: גם אורך המפגש ומספר המפגשים ביום מתאימים את עצמם לסוג */
   const pickKind = (g: Goal, k: GoalKind | undefined) =>
     updateGoal(g, k ? { kind: k, sessionMinutes: KINDS[k].session, maxPerDay: KINDS[k].maxPerDay } : { kind: undefined })
+  // היעדים שהגדרתי, ועוד תרגול אוטומטי לכל מקצוע שאין לו יעד. שינוי ביעד אוטומטי הופך אותו לשלי
+  const goalList = useMemo(() => allGoals(draft), [draft])
+  const offSubjects = settings.autoOff ?? []
+  const setAutoOff = (list: string[]) => setPlan({ autoOff: list.length ? list : undefined })
   const addGoal = () => {
     const next = saveGoal(draft, { ...newGoal(), name: `יעד ${draft.goals.length + 1}` })
     setDraft(next)
@@ -88,9 +93,15 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
             עובד לפי מה שהמחקר על למידה מראה: אורך מפגש מתאים, פיזור, ערבוב, וחזרות מרווחות.
           </p>
 
-          {draft.goals.length === 0 && <p>עוד אין יעדים. הוסף יעד ראשון, למשל "תרגול פיזיקה, 4 שעות".</p>}
+          {goalList.some((g) => g.auto) && (
+            <p className="whoami-auto">
+              לכל מקצוע שאתה לומד יש תרגול אוטומטי: כחצי מזמן השיעורים בשבוע, בין 2 ל-5 שעות. יעד שאתה משנה הופך לשלך
+              ומקבל עדיפות; התרגול האוטומטי מקבל את מה שנשאר.
+            </p>
+          )}
+          {goalList.length === 0 && <p>עוד אין יעדים. הוסף יעד ראשון, למשל "תרגול פיזיקה, 4 שעות".</p>}
 
-          {draft.goals.map((g) => {
+          {goalList.map((g) => {
             const r = plan.report.find((x) => x.goalId === g.id)
             const short = r && r.planned < r.min
             const open = openId === g.id
@@ -105,6 +116,7 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                   <span className="goal-name">
                     {g.name || 'יעד בלי שם'}
                     {g.kind && <span className="goal-kind">{KINDS[g.kind].label}</span>}
+                    {g.auto && <span className="goal-kind">אוטומטי</span>}
                   </span>
                   <span className={short ? 'goal-status is-short' : 'goal-status'}>
                     {r
@@ -406,17 +418,33 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                       type="button"
                       className="btn btn-danger"
                       onClick={() => {
-                        setDraft((d) => removeGoal(d, g.id))
+                        if (g.auto && g.subject) setAutoOff([...offSubjects, g.subject])
+                        else setDraft((d) => removeGoal(d, g.id))
                         setOpenId(null)
                       }}
                     >
-                      מחיקת היעד
+                      {g.auto ? 'בלי תרגול במקצוע הזה' : g.id.startsWith('auto-') ? 'חזרה לתרגול האוטומטי' : 'מחיקת היעד'}
                     </button>
                   </div>
                 )}
               </article>
             )
           })}
+
+          {offSubjects.length > 0 && (
+            <p className="muted">
+              בלי תרגול אוטומטי:{' '}
+              {offSubjects.map((x, k) => (
+                <span key={x}>
+                  {k > 0 && ', '}
+                  {x}{' '}
+                  <button type="button" className="link-btn" onClick={() => setAutoOff(offSubjects.filter((y) => y !== x))}>
+                    (להחזיר)
+                  </button>
+                </span>
+              ))}
+            </p>
+          )}
 
           <button type="button" className="btn" onClick={addGoal}>
             ＋ יעד חדש

@@ -1,3 +1,4 @@
+import { allGoals } from './suggest'
 import type { DayIndex, Minutes, PlanFeedback, ScheduleData, SessionPin } from '../types'
 import { DAY_NAMES, dateOfDay } from './time'
 import { newId } from './edit'
@@ -65,7 +66,7 @@ const distinctDates = (list: PlanFeedback[]) => new Set(list.map((f) => f.date))
 /** ההעדפות שנלמדו מההיסטוריה */
 export function learnedPrefs(data: ScheduleData): Pref[] {
   const feedback = data.planFeedback ?? []
-  const goals = new Map(data.goals.map((g) => [g.id, g.name]))
+  const goals = new Map(allGoals(data).map((g) => [g.id, g.name]))
   const out: Pref[] = []
   const dims: { dim: 'band' | 'day'; values: (BandKey | DayIndex)[] }[] = [
     { dim: 'band', values: BANDS.map((b) => b.key) },

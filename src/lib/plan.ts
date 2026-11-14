@@ -6,6 +6,7 @@ import { isChag, isErev } from './hebrew'
 import { INTERVALS, KINDS, MAX_REVIEWS_PER_DAY, REVIEW_MINUTES, intervalText, maxPerDay, sessionLength } from './learning'
 import { learnedPrefs, prefScore } from './prefs'
 import { validRange } from './semester'
+import { allGoals } from './suggest'
 import type { Slot } from '../types'
 
 /**
@@ -388,10 +389,11 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
   const s = planSettings(data)
   const weekDateList = DAYS_OF_WEEK.map((d) => dateOfDay(weekStart, d))
   // יעד עם תאריך יעד: פעיל עד התאריך (כולל), כל עוד נשארו שעות
+  const goalList = allGoals(data)
   const deadlines = new Map(
-    data.goals.filter((g) => g.deadline && g.totalHours).map((g) => [g.id, deadlineTarget(data, g, weekStart, today)]),
+    goalList.filter((g) => g.deadline && g.totalHours).map((g) => [g.id, deadlineTarget(data, g, weekStart, today)]),
   )
-  const goals = data.goals.filter((g) => {
+  const goals = goalList.filter((g) => {
     const d = deadlines.get(g.id)
     if (d) return d.weekly > 0
     return g.maxHoursPerWeek > 0 || g.minHoursPerWeek > 0
@@ -752,25 +754,33 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     rebuild(best.day)
   }
 
-  // שלב 1: מינימום. סבב בין היעדים, כדי שאף יעד לא יתפוס את כל המקומות הטובים
-  const fill = (targetOf: (g: Goal) => Minutes, minScore: number) => {
-    const active = new Set(goals.map((g) => g.id))
+  // שלב 1: מינימום. סבב בין היעדים, כדי שאף יעד לא יתפוס את כל המקומות הטובים.
+  // יעדים שהגדרתי בוחרים קודם; התרגול האוטומטי של שאר המקצועות מקבל את מה שנשאר
+  const mine = goals.filter((g) => !g.auto)
+  const auto = goals.filter((g) => g.auto)
+  const fill = (targetOf: (g: Goal) => Minutes, minScore: number, list: Goal[]) => {
+    const active = new Set(list.map((g) => g.id))
     while (active.size) {
-      for (const g of goals) {
+      for (const g of list) {
         if (!active.has(g.id)) continue
         const target = targetOf(g)
         if (minutesOf(g.id) >= target || !place(g, target, minScore)) active.delete(g.id)
       }
     }
   }
-  fill((g) => minOf(g) * 60, -Infinity)
+  fill((g) => minOf(g) * 60, -Infinity, mine)
+  fill((g) => minOf(g) * 60, -Infinity, auto)
 
   // תיקון: יעד שלא הגיע למינימום מקבל מקום של מפגש של יעד אחר, אם אותו מפגש יכול לעבור למקום אחר
   // והיעד האחר לא יורד מתחת למינימום שלו. כך אף יעד לא נשאר חסר רק בגלל סדר השיבוץ
   const rearranged = new Map<string, number>()
   for (const g of goals) {
     for (let tries = 0; tries < 12 && minutesOf(g.id) < minOf(g) * 60; tries++) {
-      const movable = sessions.filter((x) => x.goalId !== g.id && !x.done && !x.pinId && !x.reviewId)
+      // יעד אוטומטי לא מזיז מפגשים של יעד שהגדרתי
+      const movable = sessions.filter(
+        (x) =>
+          x.goalId !== g.id && !x.done && !x.pinId && !x.reviewId && (!g.auto || !!goals.find((o) => o.id === x.goalId)?.auto),
+      )
       let fixed = false
       for (const x of movable) {
         const other = goals.find((o) => o.id === x.goalId)
@@ -801,7 +811,8 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
   }
 
   // שלב 2: עד המקסימום, רק במקומות שבאמת מתאימים
-  fill((g) => maxOf(g) * 60, 3)
+  fill((g) => maxOf(g) * 60, 3, mine)
+  fill((g) => maxOf(g) * 60, 3, auto)
 
   // מה שפוספס: התכנון של השבוע כאילו מתחילתו, במה שכבר עבר ולא סומן. מוצג כדי שאפשר יהיה לסמן שבוצע בכל זאת
   const missed: PlannedSession[] = []
@@ -811,7 +822,10 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     const reference = planWeek(data, weekStart)
     for (const x of reference.sessions) {
       if (x.done || x.pinId || x.reviewId || !isPast(x)) continue
-      const since = goals.find((g) => g.id === x.goalId)?.since
+      const owner = goals.find((g) => g.id === x.goalId)
+      // יעד אוטומטי לא ביקשתי, ולכן לא מציגים בו פספוסים
+      if (owner?.auto) continue
+      const since = owner?.since
       // גם ביום שבו נוצר: מה שתוכנן לפני השעה שבה נוצר הוא לא פספוס
       if (since && weekDateList[x.day] <= since) continue
       // אם בפועל יש במקום הזה מפגש שסומן, לא מציגים פספוס

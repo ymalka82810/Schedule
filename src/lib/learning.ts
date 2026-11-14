@@ -1,5 +1,6 @@
 import type { Goal, GoalKind, Minutes, PracticeLog, Rating, Review, ScheduleData } from '../types'
 import { newId } from './edit'
+import { allGoals } from './suggest'
 
 /**
  * מנוע הלמידה: כללי תכנון לפי סוג הלמידה, וחזרות מרווחות.
@@ -131,7 +132,7 @@ export function logSession(
     ...(clean(details.stuck) ? { stuck: clean(details.stuck) } : {}),
   }
   let reviews = data.reviews ?? []
-  const goal = data.goals.find((g) => g.id === session.goalId)
+  const goal = allGoals(data).find((g) => g.id === session.goalId)
   if (goal?.kind === 'knowledge' && entry.topic) {
     const step = details.rating === 'easy' ? 1 : 0
     reviews = [

@@ -21,6 +21,14 @@ export interface Slot {
   end: Minutes
 }
 
+export type SemesterKey = 'a' | 'b' | 'summer'
+
+/** טווח תאריכים של סמסטר (YYYY-MM-DD, כולל). קצה חסר = פתוח */
+export interface DateRange {
+  from?: string
+  to?: string
+}
+
 /** מקצוע/שיעור. מוגדר פעם אחת ומשובץ בכמה משבצות */
 export interface Lesson {
   id: string
@@ -34,6 +42,12 @@ export interface Lesson {
   /** תוקף: השיעור קיים רק בין התאריכים (YYYY-MM-DD, כולל). חסר = תמיד */
   validFrom?: string
   validUntil?: string
+  /**
+   * הסמסטר של השיעור: התוקף נלקח מתאריכי הסמסטר שהוגדרו פעם אחת (ScheduleData.semesters).
+   * חסר = לפי ההערה מהקובץ ("סמסטר א' בלבד"). 'all' = כל השנה, גם אם ההערה אומרת אחרת.
+   * תאריכי validFrom / validUntil גוברים על הסמסטר
+   */
+  semester?: SemesterKey | 'all'
   /** שיעור אישי שלא מגיע מקובץ המערכת (למשל מיגו). ייבוא מקובץ לא מוחק אותו */
   personal?: boolean
   color: ColorKey
@@ -318,6 +332,8 @@ export interface ScheduleData {
   planSkips?: SessionSkip[]
   /** היסטוריית ההזזות והדחיות, שממנה נלמדות העדפות */
   planFeedback?: PlanFeedback[]
+  /** תאריכי הסמסטרים, פעם אחת לכל השיעורים של אותו סמסטר */
+  semesters?: Partial<Record<SemesterKey, DateRange>>
   /** חופשות: אין שיעורים, אבל מתכננים כרגיל */
   breaks?: Break[]
   /** מפגשי תרגול שסומנו כבוצעו */

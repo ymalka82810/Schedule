@@ -62,7 +62,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
   }
 
   // בשבוע מסוים: שיעור שלא בתוקף בתאריך שלו לא מוצג
-  const inForce = (id: string, day: DayIndex) => !weekStart || activeOn(lessons.get(id), dateOfDay(weekStart, day))
+  const inForce = (id: string, day: DayIndex) => !weekStart || activeOn(lessons.get(id), dateOfDay(weekStart, day), data.semesters)
   /** המקום בשבוע המוצג: קבוע, או הוזז בשבוע הזה בלבד */
   const place = (refId: string, slot: Slot) => {
     if (!weekStart) return { slot, moved: false }

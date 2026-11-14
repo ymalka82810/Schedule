@@ -78,7 +78,7 @@ function dropUnused(data: ScheduleData): ScheduleData {
   return { ...data, lessons: data.lessons.filter((l) => used.has(l.id)) }
 }
 
-export type LessonPatch = Partial<Pick<Lesson, 'name' | 'teacher' | 'room' | 'color' | 'validFrom' | 'validUntil'>>
+export type LessonPatch = Partial<Pick<Lesson, 'name' | 'teacher' | 'room' | 'color' | 'validFrom' | 'validUntil' | 'semester'>>
 
 /** שינוי פרטי השיעור. חל על כל השיבוצים שלו */
 export function updateLesson(data: ScheduleData, lessonId: string, patch: LessonPatch): ScheduleData {

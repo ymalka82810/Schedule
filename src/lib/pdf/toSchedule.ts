@@ -48,6 +48,7 @@ export function draftToData(items: DraftItem[], base: ScheduleData, source?: Sou
     lessons.push({
       validFrom: prev?.validFrom,
       validUntil: prev?.validUntil,
+      semester: prev?.semester,
       id,
       name: o.name,
       teacher: o.teacher || undefined,

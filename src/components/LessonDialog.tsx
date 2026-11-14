@@ -24,6 +24,11 @@ import { DAYS, DAY_NAMES, dateOfDay, formatTime, fromTimeInput, startOfWeek, toT
 import { moveOf } from '../lib/plan'
 import { DayPicker } from './DayPicker'
 import { LESSON_KINDS } from '../lib/pdf/parseCell'
+import { SEMESTERS, SEMESTER_NAMES, lessonsOfSemester, semesterFromNote, semesterOf, setSemesterDates } from '../lib/semester'
+import type { SemesterKey } from '../types'
+
+/** מתי השיעור קיים: כל השנה, סמסטר (תאריכים משותפים), או תאריכים משלו */
+type Validity = 'all' | SemesterKey | 'dates'
 
 export type LessonTarget = Extract<BlockTarget, { kind: 'entry' | 'choice' | 'practice' }>
 export type LessonDialogMode = { kind: 'edit'; target: LessonTarget } | { kind: 'new'; day: DayIndex }
@@ -65,6 +70,16 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
   const [kind, setKind] = useState(target?.kind === 'entry' ? (target.entry.kind ?? '') : '')
   const [validFrom, setValidFrom] = useState(lesson?.validFrom ?? '')
   const [validUntil, setValidUntil] = useState(lesson?.validUntil ?? '')
+  const [validity, setValidity] = useState<Validity>(
+    !lesson ? 'all' : lesson.validFrom || lesson.validUntil ? 'dates' : (semesterOf(lesson) ?? 'all'),
+  )
+  // תאריכי הסמסטרים נערכים כאן, אבל משותפים לכל השיעורים של הסמסטר
+  const [semDates, setSemDates] = useState(() =>
+    Object.fromEntries(SEMESTERS.map((k) => [k, { from: data.semesters?.[k]?.from ?? '', to: data.semesters?.[k]?.to ?? '' }])) as Record<
+      SemesterKey,
+      { from: string; to: string }
+    >,
+  )
   const [slot, setSlot] = useState<Slot>(initialSlot)
   // פעילות בכמה ימים: ימים חדשים, או האחים של השיבוץ (אותו שיעור באותן שעות)
   const group = target?.kind === 'entry' ? siblings(data, target.entry.id) : []
@@ -105,7 +120,11 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
     if (multi && !days.length) return setError('צריך לבחור לפחות יום אחד.')
     const needsName = target?.kind !== 'choice'
     if (needsName && !name.trim()) return setError('צריך שם.')
-    if (validFrom && validUntil && validUntil < validFrom) return setError('תאריך הסיום של התוקף לפני תאריך ההתחלה.')
+    if (validity === 'dates' && validFrom && validUntil && validUntil < validFrom)
+      return setError('תאריך הסיום של התוקף לפני תאריך ההתחלה.')
+    const sem = validity !== 'all' && validity !== 'dates' ? validity : null
+    if (sem && semDates[sem].from && semDates[sem].to && semDates[sem].to < semDates[sem].from)
+      return setError(`${SEMESTER_NAMES[sem]} נגמר לפני שהוא מתחיל.`)
 
     let next = data
     if (mode.kind === 'new') {
@@ -113,14 +132,18 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
       next = addActivity(data, { name, teacher, room, color, slots })
     } else if (target?.kind === 'entry') {
       // שם, מרצה, חדר וצבע שייכים לשיעור ומשתנים בכל השיבוצים שלו. השעה רק בשיבוץ הזה
+      const fromNote = semesterFromNote(target.lesson.note)
       next = updateLesson(data, target.lesson.id, {
         name: name.trim(),
         teacher: teacher.trim() || undefined,
         room: room.trim() || undefined,
         color,
-        validFrom: validFrom || undefined,
-        validUntil: validUntil || undefined,
+        validFrom: validity === 'dates' ? validFrom || undefined : undefined,
+        validUntil: validity === 'dates' ? validUntil || undefined : undefined,
+        // סמסטר שזהה למה שכתוב בקובץ לא נשמר, כדי שתיקון בקובץ הבא ישפיע. "כל השנה" נשמר רק כשהקובץ אומר אחרת
+        semester: sem ? (sem === fromNote ? undefined : sem) : validity === 'all' && fromNote ? 'all' : undefined,
       })
+      if (sem) next = setSemesterDates(next, sem, semDates[sem])
       // הסוג שייך לשיבוץ: לכל הימים של הפעילות, או רק לזה
       next = setEntryKind(next, onlyThis ? [target.entry.id] : group.map((e) => e.id), kind)
       next = onlyThis
@@ -250,22 +273,63 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
               )}
               {lesson && (
                 <fieldset className="color-set">
-                  <legend>תוקף (לא חובה)</legend>
-                  {lesson.note && (
-                    <p className="whoami-auto">
-                      בקובץ כתוב: {lesson.note}. {!validUntil && 'אם תכתוב מתי זה נגמר, השיעור ייעלם מהמערכת אחרי התאריך.'}
-                    </p>
+                  <legend>מתי השיעור קיים</legend>
+                  {lesson.note && <p className="whoami-auto">בקובץ כתוב: {lesson.note}.</p>}
+                  <label className="field">
+                    <span>תוקף</span>
+                    <select value={validity} onChange={(e) => setValidity(e.target.value as Validity)}>
+                      <option value="all">כל השנה</option>
+                      {SEMESTERS.map((k) => (
+                        <option key={k} value={k}>
+                          {SEMESTER_NAMES[k]}
+                        </option>
+                      ))}
+                      <option value="dates">תאריכים של השיעור הזה בלבד</option>
+                    </select>
+                  </label>
+                  {validity !== 'all' && validity !== 'dates' && (() => {
+                    const others = lessonsOfSemester(data, validity).filter((l) => l.id !== lesson.id).length
+                    const d = semDates[validity]
+                    const set = (patch: Partial<typeof d>) => setSemDates({ ...semDates, [validity]: { ...d, ...patch } })
+                    return (
+                      <>
+                        <div className="edit-row">
+                          <label className="field">
+                            <span>{SEMESTER_NAMES[validity]} מתחיל</span>
+                            <input type="date" value={d.from} onChange={(e) => set({ from: e.target.value })} />
+                          </label>
+                          <label className="field">
+                            <span>ונגמר</span>
+                            <input
+                              type="date"
+                              value={d.to}
+                              aria-invalid={!!d.from && !!d.to && d.to < d.from}
+                              onChange={(e) => set({ to: e.target.value })}
+                            />
+                          </label>
+                        </div>
+                        <p className="muted">
+                          {!d.from && !d.to
+                            ? 'בלי תאריכים השיעור מוצג כל השנה. '
+                            : ''}
+                          התאריכים של {SEMESTER_NAMES[validity]} נשמרים פעם אחת
+                          {others > 0 ? ` וחלים גם על עוד ${others} שיעורים של הסמסטר.` : ' לכל השיעורים של הסמסטר.'}
+                        </p>
+                      </>
+                    )
+                  })()}
+                  {validity === 'dates' && (
+                    <div className="edit-row">
+                      <label className="field">
+                        <span>מתאריך</span>
+                        <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+                      </label>
+                      <label className="field">
+                        <span>עד תאריך</span>
+                        <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+                      </label>
+                    </div>
                   )}
-                  <div className="edit-row">
-                    <label className="field">
-                      <span>מתאריך</span>
-                      <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
-                    </label>
-                    <label className="field">
-                      <span>עד תאריך</span>
-                      <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
-                    </label>
-                  </div>
                 </fieldset>
               )}
               {usesOfLesson > 1 && (

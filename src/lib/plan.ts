@@ -3,8 +3,9 @@ import { sameSubject } from './pdf/parseCell'
 import { placeRoutines, type PlacedRoutine } from './routines'
 import { DAY_NAMES, dateOfDay, formatTime } from './time'
 import { isChag, isErev } from './hebrew'
-import { INTERVALS, KINDS, REVIEW_MINUTES, intervalText, maxPerDay, sessionLength } from './learning'
+import { INTERVALS, KINDS, MAX_REVIEWS_PER_DAY, REVIEW_MINUTES, intervalText, maxPerDay, sessionLength } from './learning'
 import { learnedPrefs, prefScore } from './prefs'
+import { validRange } from './semester'
 import type { Slot } from '../types'
 
 /**
@@ -145,8 +146,11 @@ function upcomingExams(data: ScheduleData, subject: string, weekStart: Date) {
 }
 
 /** האם השיעור בתוקף בתאריך (סמסטר א' בלבד וכד') */
-export const activeOn = (l: Lesson | undefined, date: string) =>
-  !!l && (!l.validFrom || date >= l.validFrom) && (!l.validUntil || date <= l.validUntil)
+export function activeOn(l: Lesson | undefined, date: string, semesters?: ScheduleData['semesters']) {
+  if (!l) return false
+  const { from, to } = validRange(l, semesters)
+  return (!from || date >= from) && (!to || date <= to)
+}
 
 /** הזזה בשבוע אחד של שיבוץ קבוע, לפי התאריך שבו היה אמור להיות */
 export const moveOf = (data: ScheduleData, refId: string, date: string) =>
@@ -170,7 +174,7 @@ export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
   const out: Busy[] = []
   for (const e of data.entries) {
     const { date, moved: _m, ...slot } = placeOf(data, e.id, e.slot, weekStart)
-    if (isCancelled(data, e.id, date) || !activeOn(lessons.get(e.lessonId), date)) continue
+    if (isCancelled(data, e.id, date) || !activeOn(lessons.get(e.lessonId), date, data.semesters)) continue
     const name = lessons.get(e.lessonId)?.name ?? ''
     out.push({ ...slot, label: name, kind: 'lesson', names: [name], kinds: [e.kind] })
   }
@@ -178,7 +182,7 @@ export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
     const { date, moved: _m, ...slot } = placeOf(data, g.id, g.slot, weekStart)
     if (isCancelled(data, g.id, date)) continue
     const ids = (g.chosenLessonId ? [g.chosenLessonId] : g.optionLessonIds).filter((id) =>
-      activeOn(lessons.get(id), date),
+      activeOn(lessons.get(id), date, data.semesters),
     )
     if (!ids.length) continue
     const names = ids.map((id) => lessons.get(id)?.name ?? '')
@@ -669,11 +673,18 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     })
     .filter(({ due }) => due >= weekDates[0] && due <= weekDates[6])
     .sort((a, b) => a.due.localeCompare(b.due) || a.r.step - b.r.step)
+  const reviewsOn = (day: DayIndex) => sessions.filter((x) => x.reviewId && x.day === day).length
   for (const { r, due } of pending) {
     const g = goals.find((x) => x.id === r.goalId)!
     const first = weekDates.indexOf(due)
     let best: (Candidate & { late: number }) | null = null
+    let full = false
     for (const day of DAYS_OF_WEEK.slice(first)) {
+      // תקרה לחזרות ביום: כשנלמדו הרבה נושאים, החזרות מתפזרות על הימים הבאים ולא נערמות
+      if (reviewsOn(day) >= MAX_REVIEWS_PER_DAY) {
+        if (day === first) full = true
+        continue
+      }
       if (dayLoad(day) + REVIEW_MINUTES > s.maxHoursPerDay * 60) continue
       if (lessonMinutes[day] + dayLoad(day) + REVIEW_MINUTES > maxLoad) continue
       if (g.days?.length && !g.days.includes(day)) continue
@@ -684,7 +695,7 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
           if (g.latest !== undefined && end > g.latest) continue
           if (skipped(g.id, day, t, end)) continue
           // אותו יום עדיף מאוד; תרגול קל עדיף מחוץ לשעות החדות; לא מאוחר בלילה; ולפי ההעדפות שנלמדו
-          let sc = -(day - first) * 3 + prefScore(prefs, g.id, day, t).sc
+          let sc = -(day - first) * 3 + prefScore(prefs, g.id, day, t).sc - reviewsOn(day)
           if (sharp && !inSharp(t, end)) sc += 1
           if (end > 22 * 60) sc -= 2
           if (start9(t)) sc -= 1
@@ -699,7 +710,11 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     ]
     if (r.due < due || best.late > 0) {
       const [, m, d] = r.due.split('-')
-      reasons.push(`נדחתה מ-${Number(d)}.${Number(m)}, ולא נעלמה`)
+      reasons.push(
+        full && r.due >= due
+          ? `נדחתה מ-${Number(d)}.${Number(m)} כי כבר היו שם ${MAX_REVIEWS_PER_DAY} חזרות (יום או יומיים אחרי עדיין עובד)`
+          : `נדחתה מ-${Number(d)}.${Number(m)}, ולא נעלמה`,
+      )
     }
     sessions.push({
       id: `review-${r.id}`,

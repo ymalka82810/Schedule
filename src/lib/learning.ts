@@ -59,6 +59,9 @@ export const REVIEW_TIP =
 /** אורך מפגש חזרה */
 export const REVIEW_MINUTES: Minutes = 20
 
+/** כמה חזרות לכל היותר ביום, מכל היעדים יחד. השאר עוברות ליום הבא */
+export const MAX_REVIEWS_PER_DAY = 3
+
 /** המרווחים בין החזרות, בימים: יום, שלושה ימים, שבוע, שבועיים, חודש */
 export const INTERVALS = [1, 3, 7, 14, 30]
 

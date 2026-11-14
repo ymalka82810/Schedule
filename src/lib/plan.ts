@@ -7,6 +7,7 @@ import { INTERVALS, KINDS, MAX_REVIEWS_PER_DAY, REVIEW_MINUTES, intervalText, ma
 import { learnedPrefs, prefScore } from './prefs'
 import { validRange } from './semester'
 import { allGoals } from './suggest'
+import { needFactor, priorities, priorityOf, type SubjectPriority } from './priority'
 import type { Slot } from '../types'
 
 /**
@@ -111,6 +112,8 @@ export interface GoalReport {
   max: Minutes
   /** למה היעד גדל השבוע, אם גדל (מבחן קרוב) */
   boost?: string
+  /** העדיפות לפי הציונים, אם יש למקצוע ציונים */
+  priority?: { need: number; reason: string; factor?: number }
   /** חזרות מרווחות השבוע: כמה מתוכננות (כולל שבוצעו) וכמה בוצעו */
   reviews: number
   reviewsDone: number
@@ -488,9 +491,15 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
   // יעד עם תאריך יעד: המינימום והמקסימום הם החלק של השבוע מהשעות שנשארו
   const baseMin = (g: Goal) => deadlines.get(g.id)?.weekly ?? g.minHoursPerWeek
   const baseMax = (g: Goal) => deadlines.get(g.id)?.weekly ?? g.maxHoursPerWeek
-  const minOf = (g: Goal) => Math.round(baseMin(g) * (boosts.get(g.id)?.factor ?? 1) * 2) / 2
-  const maxOf = (g: Goal) =>
-    Math.max(minOf(g), Math.round(baseMax(g) * (boosts.get(g.id)?.factor ?? 1) * 2) / 2)
+  // עדיפות לפי הציונים האחרונים: תרגול אוטומטי גדל או קטן לפי הצורך, וכל היעדים נכנסים לפי הסדר הזה
+  const asOf = today && today < weekDateList[6] ? today : weekDateList[6]
+  const prio = priorities(data, asOf)
+  const prioOf = (g: Goal): SubjectPriority | undefined => priorityOf(prio, g.subject)
+  const needOf = (g: Goal) => prioOf(g)?.need ?? 0.5
+  const byNeed = (a: Goal, b: Goal) => needOf(b) - needOf(a)
+  const factorOf = (g: Goal) => (boosts.get(g.id)?.factor ?? 1) * (g.auto ? needFactor(prioOf(g)) : 1)
+  const minOf = (g: Goal) => Math.round(baseMin(g) * factorOf(g) * 2) / 2
+  const maxOf = (g: Goal) => Math.max(minOf(g), Math.round(baseMax(g) * factorOf(g) * 2) / 2)
 
   const lengthOf = (g: Goal, target: Minutes) => {
     const len = sessionLength(g)
@@ -555,11 +564,15 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     const reasons: string[] = [...pref.reasons]
 
     const inPractice = practice.find((w) => w.slot.day === day && w.slot.start <= start && end <= w.slot.end)
+    // מפגש לא חוצה את הגבול של חלון תרגול: או בתוכו, או מחוצה לו
+    if (!inPractice && practice.some((w) => w.slot.day === day && w.slot.start < end && start < w.slot.end)) return null
     if (inPractice) {
       // חלונות התרגול שמורים ללימוד: יעד של מקצוע מקבל עדיפות, יעד אחר (אימון) רק אם אין ברירה
       if (g.preferPractice || g.subject) {
-        sc += g.preferPractice ? 5 : 2
+        sc += (g.preferPractice ? 5 : 2) + Math.round((prioOf(g)?.need ?? 0) * 4)
         reasons.push(`בחלון ${inPractice.name}${inPractice.context ? ` של ${inPractice.context}` : ''}`)
+        const p = prioOf(g)
+        if (p && p.need >= 0.4) reasons.push(`עדיפות לפי הציונים: ${p.reason}`)
       } else {
         sc -= 2
       }
@@ -754,10 +767,56 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     rebuild(best.day)
   }
 
+  // חלונות התרגול החופשי (לבחירתך, או חלון שהוספתי) מתמלאים ראשונים, לפי העדיפות:
+  // יעד שביקשתי שייכנס לחלונות, אחר כך המקצוע שהציונים שלו הכי חלשים, ואחר כך מי שהכי רחוק מהיעד השבועי.
+  // שאר השעות של כל יעד משובצות אחר כך סביב החלונות
+  const subjectGoals = goals.filter((g) => g.subject || g.preferPractice)
+  for (const w of practice) {
+    const day = w.slot.day
+    for (let guard = 0; guard < 8; guard++) {
+      const gap = free[day]
+        .map((f) => ({ start: Math.ceil(Math.max(f.start, w.slot.start) / STEP) * STEP, end: Math.min(f.end, w.slot.end) }))
+        .find((f) => f.end - f.start >= 30)
+      if (!gap) break
+      const inWindow = (g: Goal) =>
+        sessions.some((x) => x.goalId === g.id && x.day === day && x.start < w.slot.end && w.slot.start < x.end)
+      const progress = (g: Goal) => minutesOf(g.id) / Math.max(1, maxOf(g) * 60)
+      const pick = [...subjectGoals]
+        .sort((a, b) => +inWindow(a) - +inWindow(b) || +!!b.preferPractice - +!!a.preferPractice || byNeed(a, b) || progress(a) - progress(b))
+        .find((g) => {
+          const len = Math.min(sessionLength(g), gap.end - gap.start)
+          if (g.days?.length && !g.days.includes(day)) return false
+          if (g.kind && goalMinutesOn(g.id, day) + len > KINDS[g.kind].dailyCap) return false
+          return !skipped(g.id, day, gap.start, gap.start + len)
+        })
+      if (!pick) break
+      const len = Math.min(sessionLength(pick), gap.end - gap.start)
+      const p = prioOf(pick)
+      const where = `בחלון ${w.name}${w.context ? ` של ${w.context}` : ''}`
+      let n = sessions.filter((x) => x.goalId === pick.id).length + 1
+      while (sessions.some((x) => x.id === `plan-${pick.id}-${n}`)) n++
+      sessions.push({
+        id: `plan-${pick.id}-${n}`,
+        goalId: pick.id,
+        day,
+        start: gap.start,
+        end: gap.start + len,
+        reasons: [
+          where,
+          p
+            ? `${pick.subject ?? pick.name} בעדיפות ${p === prio[0] ? 'הגבוהה ביותר' : 'גבוהה'} עכשיו: ${p.reason}`
+            : `זמן תרגול חופשי: ${pick.subject ?? pick.name} לפי הסדר`,
+        ],
+      })
+      rebuild(day)
+    }
+  }
+
+
   // שלב 1: מינימום. סבב בין היעדים, כדי שאף יעד לא יתפוס את כל המקומות הטובים.
   // יעדים שהגדרתי בוחרים קודם; התרגול האוטומטי של שאר המקצועות מקבל את מה שנשאר
-  const mine = goals.filter((g) => !g.auto)
-  const auto = goals.filter((g) => g.auto)
+  const mine = goals.filter((g) => !g.auto).sort(byNeed)
+  const auto = goals.filter((g) => g.auto).sort(byNeed)
   const fill = (targetOf: (g: Goal) => Minutes, minScore: number, list: Goal[]) => {
     const active = new Set(list.map((g) => g.id))
     while (active.size) {
@@ -851,6 +910,9 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
       min: minOf(g) * 60,
       max: maxOf(g) * 60,
       boost: boosts.get(g.id)?.note,
+      ...(prioOf(g)
+        ? { priority: { need: prioOf(g)!.need, reason: prioOf(g)!.reason, ...(g.auto ? { factor: needFactor(prioOf(g)) } : {}) } }
+        : {}),
       reviews: sessions.filter((x) => x.goalId === g.id && x.reviewId).length,
       reviewsDone: sessions.filter((x) => x.goalId === g.id && x.reviewId && x.done).length,
       ...(deadlines.get(g.id)

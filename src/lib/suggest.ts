@@ -13,6 +13,11 @@ export interface GoalSuggestion {
   classMinutes: number
 }
 
+/** המקצועות שאני באמת לומד (שיבוצים ובחירות שבחרתי), לפי זמן השיעורים בשבוע */
+export function attendedSubjects(data: ScheduleData): string[] {
+  return suggestGoals({ ...data, goals: [] }, { includeOff: true }).map((x) => x.subject)
+}
+
 export function suggestGoals(data: ScheduleData, opts: { includeOff?: boolean } = {}): GoalSuggestion[] {
   const lessons = new Map(data.lessons.filter((l) => !l.personal).map((l) => [l.id, l]))
   const minutes = new Map<string, { m: number; color: Goal['color'] }>()

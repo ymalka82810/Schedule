@@ -4,6 +4,7 @@ import {
   COLORS,
   COLOR_NAMES,
   addActivity,
+  addPracticeWindows,
   setActivityDays,
   setEntryKind,
   siblings,
@@ -87,6 +88,8 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
     mode.kind === 'new' ? [mode.day] : group.map((e) => e.slot.day).sort((a, b) => a - b),
   )
   const [onlyThis, setOnlyThis] = useState(false)
+  /** פעילות חדשה שהיא חלון תרגול חופשי: התכנון ממלא אותו לפי העדיפות */
+  const [asPractice, setAsPractice] = useState(false)
   const [perDay, setPerDay] = useState(false)
   const [times, setTimes] = useState<Partial<Record<DayIndex, { start: number; end: number }>>>({})
   const timeOf = (d: DayIndex) => times[d] ?? { start: slot.start, end: slot.end }
@@ -119,7 +122,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
     if (problem) return setError(problem)
     if (multi && !days.length) return setError('צריך לבחור לפחות יום אחד.')
     const needsName = target?.kind !== 'choice'
-    if (needsName && !name.trim()) return setError('צריך שם.')
+    if (needsName && !name.trim() && !asPractice) return setError('צריך שם.')
     if (validity === 'dates' && validFrom && validUntil && validUntil < validFrom)
       return setError('תאריך הסיום של התוקף לפני תאריך ההתחלה.')
     const sem = validity !== 'all' && validity !== 'dates' ? validity : null
@@ -129,7 +132,9 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
     let next = data
     if (mode.kind === 'new') {
       const slots = days.map((day) => ({ day, ...(perDay ? timeOf(day) : { start: slot.start, end: slot.end }) }))
-      next = addActivity(data, { name, teacher, room, color, slots })
+      next = asPractice
+        ? addPracticeWindows(data, name, slots, room)
+        : addActivity(data, { name, teacher, room, color, slots })
     } else if (target?.kind === 'entry') {
       // שם, מרצה, חדר וצבע שייכים לשיעור ומשתנים בכל השיבוצים שלו. השעה רק בשיבוץ הזה
       const fromNote = semesterFromNote(target.lesson.note)
@@ -221,11 +226,23 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
             </fieldset>
           ) : (
             <>
+              {mode.kind === 'new' && (
+                <label className="whoami-option">
+                  <input type="checkbox" checked={asPractice} onChange={(e) => setAsPractice(e.target.checked)} />
+                  <span>חלון תרגול חופשי: המערכת תקבע בכל שבוע מה לתרגל בו, לפי הציונים והעדיפות</span>
+                </label>
+              )}
               <label className="field">
                 <span>שם</span>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+                <input
+                  type="text"
+                  value={name}
+                  placeholder={asPractice ? 'תרגול חופשי' : undefined}
+                  onChange={(e) => setName(e.target.value)}
+                  autoFocus
+                />
               </label>
-              {target?.kind !== 'practice' && (
+              {target?.kind !== 'practice' && !asPractice && (
                 <label className="field">
                   <span>מרצה</span>
                   <input type="text" value={teacher} onChange={(e) => setTeacher(e.target.value)} />
@@ -249,10 +266,10 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
                 </label>
               )}
               <label className="field">
-                <span>{target?.kind === 'practice' ? 'מסגרת' : 'חדר'}</span>
+                <span>{target?.kind === 'practice' || asPractice ? 'מסגרת (לא חובה)' : 'חדר'}</span>
                 <input type="text" value={room} onChange={(e) => setRoom(e.target.value)} />
               </label>
-              {target?.kind !== 'practice' && (
+              {target?.kind !== 'practice' && !asPractice && (
                 <fieldset className="color-set">
                   <legend>צבע</legend>
                   <div className="color-swatches">

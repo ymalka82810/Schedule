@@ -5,6 +5,7 @@ import { ImportDialog } from './components/ImportDialog'
 import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { EventDialog, SessionDialog } from './components/EventDialogs'
 import { GoalsDialog } from './components/GoalsDialog'
+import { GradesDialog } from './components/GradesDialog'
 import { Today } from './components/Today'
 import { activeWeek, breakOn, isWorkDay, planSettings, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
@@ -37,6 +38,7 @@ type Dialog =
   | { kind: 'event'; event: OneOffEvent | { date: string } }
   | { kind: 'session'; session: PlannedSession; goal: Goal }
   | { kind: 'goals' }
+  | { kind: 'grades' }
   | {
       kind: 'move'
       target: BlockTarget
@@ -317,6 +319,10 @@ export default function App({ initialData, initialBackup, account, onPersist, in
             יעדים
           </button>
 
+          <button type="button" className="btn" onClick={() => setDialog({ kind: 'grades' })}>
+            ציונים
+          </button>
+
           <button type="button" className="btn" onClick={() => setImporting(true)}>
             ייבוא וגיבוי
           </button>
@@ -493,6 +499,10 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       )}
       {dialog?.kind === 'goals' && (
         <GoalsDialog data={data} weekStart={weekStart} today={todayIso} onSave={handleEdit} onClose={() => setDialog(null)} />
+      )}
+
+      {dialog?.kind === 'grades' && (
+        <GradesDialog data={data} today={todayIso} onSave={handleEdit} onClose={() => setDialog(null)} />
       )}
 
       {toast && history.length > 0 && (

@@ -301,6 +301,20 @@ export interface OneOffEvent {
   examSubject?: string
 }
 
+/**
+ * ציון במקצוע: ציון במבחן או בוחן (0–100), או הערכה עצמית שבועית (1–5, כמה אני שולט).
+ * מהציונים האחרונים המערכת מחשבת עדיפות לכל מקצוע: כמה לתרגל ומה נכנס קודם לחלונות התרגול
+ */
+export interface Grade {
+  id: string
+  subject: string
+  /** YYYY-MM-DD */
+  date: string
+  kind: 'exam' | 'self'
+  score: number
+  note?: string
+}
+
 /** חופשה של המוסד: אין לימודים בין התאריכים (כולל) */
 export interface Break {
   id: string
@@ -341,6 +355,8 @@ export interface ScheduleData {
   planFeedback?: PlanFeedback[]
   /** תאריכי הסמסטרים, פעם אחת לכל השיעורים של אותו סמסטר */
   semesters?: Partial<Record<SemesterKey, DateRange>>
+  /** ציונים והערכות עצמיות, שמהם נקבעת העדיפות בין המקצועות */
+  grades?: Grade[]
   /** חופשות: אין שיעורים, אבל מתכננים כרגיל */
   breaks?: Break[]
   /** מפגשי תרגול שסומנו כבוצעו */

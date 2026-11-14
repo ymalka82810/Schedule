@@ -303,6 +303,16 @@ export function siblings(data: ScheduleData, entryId: string): FixedEntry[] {
   )
 }
 
+/** חלון תרגול חופשי חדש בכמה ימים: זמן קבוע ללימוד, והתכנון קובע מה לתרגל בו לפי העדיפות */
+export function addPracticeWindows(data: ScheduleData, name: string, slots: Slot[], context?: string): ScheduleData {
+  let windows = data.practiceWindows ?? []
+  for (const slot of slots) {
+    const id = newId('practice', windows.map((w) => w.id))
+    windows = [...windows, { id, slot, name: name.trim() || 'תרגול חופשי', ...(context?.trim() ? { context: context.trim() } : {}) }]
+  }
+  return { ...data, practiceWindows: windows }
+}
+
 /** שיעור או פעילות חדשים בכמה ימים, באותן שעות (או בשעות שונות לכל יום) */
 export function addActivity(data: ScheduleData, input: Omit<NewLesson, 'slot'> & { slots: Slot[] }): ScheduleData {
   let next = data

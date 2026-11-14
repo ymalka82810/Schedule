@@ -125,6 +125,14 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
                   </span>
                 </button>
                 {r?.boost && <p className="whoami-auto">{r.boost}: התרגול השבוע גדל פי 1.5.</p>}
+                {r?.priority && (
+                  <p className="whoami-auto">
+                    לפי הציונים: {r.priority.reason}.
+                    {r.priority.factor && Math.abs(r.priority.factor - 1) >= 0.05
+                      ? ` התרגול האוטומטי ${r.priority.factor > 1 ? 'גדל' : 'קטן'} ל-${Math.round(r.priority.factor * 100)}%.`
+                      : ''}
+                  </p>
+                )}
                 {r?.deadline && (
                   <p className="whoami-auto">
                     {r.deadline.passed

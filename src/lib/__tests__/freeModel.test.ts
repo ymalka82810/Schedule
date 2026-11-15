@@ -8,6 +8,7 @@ vi.mock('../suggest', async (orig) => ({
 import { emptyData } from '../../data/empty'
 import { DEFAULT_PLAN, deadlineTarget, planWeek, weekFrame } from '../plan'
 import { zmanimOn } from '../routines'
+import { dismissMissed } from '../prefs'
 import type { Goal, Lesson, PlanSettings, ScheduleData } from '../../types'
 
 // שבוע שמתחיל ביום ראשון 15.11.2026
@@ -136,6 +137,18 @@ describe('עבר ופספוסים', () => {
     const auto = base({}, { goals: [goal({ id: 'a', name: 'פיזיקה', auto: true, minHoursPerWeek: 5, maxHoursPerWeek: 5 })] })
     const p = planWeek(auto, WEEK, '2026-11-17', h(15))
     expect(p.sessions.some((s) => s.missed && s.goalId === 'a')).toBe(true)
+  })
+
+  it('"לא יצא לי" מוריד את הפספוס מהלוח בלי ללמוד שהשעה לא מתאימה; "לא מתאימה" כן נרשם', () => {
+    const p = planWeek(data, WEEK, '2026-11-17', h(15))
+    const m = p.sessions.find((s) => s.missed)!
+    const date = ['2026-11-15', '2026-11-16', '2026-11-17'][m.day]
+    const later = dismissMissed(data, m, date)
+    const after = planWeek(later, WEEK, '2026-11-17', h(15))
+    expect(after.sessions.some((s) => s.missed && s.day === m.day && overlap(s, m))).toBe(false)
+    expect(after.report[0].planned).toBe(h(5))
+    expect(later.planFeedback ?? []).toEqual([])
+    expect(dismissMissed(data, m, date, true).planFeedback).toHaveLength(1)
   })
 
   it('שבוע שעבר כולו: רק מה שבוצע', () => {

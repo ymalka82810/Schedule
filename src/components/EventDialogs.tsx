@@ -18,7 +18,7 @@ import {
 import { subjectNames } from '../lib/plan'
 import { DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
 import { useEscape } from './useEscape'
-import { skipPlanned, unpinPlanned } from '../lib/prefs'
+import { dismissMissed, skipPlanned, unpinPlanned } from '../lib/prefs'
 
 interface EventProps {
   data: ScheduleData
@@ -365,7 +365,10 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
           )}
 
           {session.missed && (
-            <p className="whoami-auto">המפגש הסתיים. אם תרגלת, ספר כאן איך היה וסמן; אם לא, התכנון כבר משלים אותו בהמשך השבוע.</p>
+            <p className="whoami-auto">
+              המפגש הסתיים. אם תרגלת, ספר כאן איך היה וסמן. אם לא יצא לך, התכנון כבר משלים אותו בהמשך השבוע, ואפשר
+              להוריד אותו מהלוח.
+            </p>
           )}
           {!session.done && !isReview && !session.missed && (
             <p className="muted">המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.</p>
@@ -395,6 +398,26 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
                 onClick={() => onSave(skipPlanned(data, session, date))}
               >
                 לא מתאים לי כאן
+              </button>
+            )}
+            {session.missed && (
+              <button
+                type="button"
+                className="btn"
+                title="המפגש יורד מהלוח ומושלם בהמשך השבוע. השעה לא נרשמת כלא מתאימה"
+                onClick={() => onSave(dismissMissed(data, session, date))}
+              >
+                לא יצא לי
+              </button>
+            )}
+            {session.missed && !isReview && (
+              <button
+                type="button"
+                className="btn"
+                title="המפגש יורד מהלוח, ונרשם שהשעה הזו לא מתאימה לך. כשזה חוזר, התכנון מתרחק ממנה"
+                onClick={() => onSave(dismissMissed(data, session, date, true))}
+              >
+                השעה לא מתאימה לי
               </button>
             )}
             {session.pinId && !session.done && (

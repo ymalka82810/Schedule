@@ -902,6 +902,13 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
       const since = owner?.since
       // גם ביום שבו נוצר: מה שתוכנן לפני השעה שבה נוצר הוא לא פספוס
       if (since && weekDateList[x.day] <= since) continue
+      // סימנתי שלא יצא לי: יורד מהלוח (התכנון כבר משלים אותו)
+      if (
+        (data.planDismissed ?? []).some(
+          (d) => d.goalId === x.goalId && d.date === weekDateList[x.day] && d.start < x.end && x.start < d.end,
+        )
+      )
+        continue
       // אם בפועל יש במקום הזה מפגש שסומן, לא מציגים פספוס
       if (sessions.some((y) => y.day === x.day && y.start < x.end && x.start < y.end)) continue
       missed.push({

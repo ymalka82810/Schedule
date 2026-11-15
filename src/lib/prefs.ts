@@ -149,6 +149,7 @@ function prune(data: ScheduleData, today: string): ScheduleData {
     ...data,
     planPins: (data.planPins ?? []).filter((p) => p.date >= min),
     planSkips: (data.planSkips ?? []).filter((p) => p.date >= min),
+    planDismissed: (data.planDismissed ?? []).filter((p) => p.date >= min),
   }
 }
 
@@ -256,4 +257,42 @@ export function skipPlanned(data: ScheduleData, session: PlannedSession, date: s
 
 function dayOfDate(weekStart: Date, date: string): DayIndex | undefined {
   return ([0, 1, 2, 3, 4, 5, 6] as DayIndex[]).find((d) => dateOfDay(weekStart, d) === date)
+}
+
+/**
+ * מפגש שהזמן שלו עבר ולא תרגלתי: יורד מהלוח, והתכנון משלים אותו בהמשך השבוע.
+ * "לא יצא לי" לא מלמד כלום על השעה. רק כשאומרים במפורש שהשעה לא מתאימה, זה נרשם כהעדפה
+ */
+export function dismissMissed(data: ScheduleData, session: PlannedSession, date: string, notSuitable = false): ScheduleData {
+  const dismissed = data.planDismissed ?? []
+  const feedback = data.planFeedback ?? []
+  const next: ScheduleData = {
+    ...data,
+    planDismissed: [
+      ...dismissed,
+      {
+        id: newId('dis', dismissed.map((s) => s.id)),
+        goalId: session.goalId,
+        date,
+        start: session.start,
+        end: session.end,
+      },
+    ],
+    ...(notSuitable
+      ? {
+          planFeedback: trim([
+            ...feedback,
+            {
+              id: newId('f', feedback.map((f) => f.id)),
+              goalId: session.goalId,
+              date,
+              day: session.day,
+              start: session.start,
+              action: 'removed' as const,
+            },
+          ]),
+        }
+      : {}),
+  }
+  return prune(next, date)
 }

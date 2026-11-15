@@ -358,6 +358,8 @@ export interface ScheduleData {
   planPins?: SessionPin[]
   /** מפגשים מתוכננים שסומנו "לא מתאים לי כאן" */
   planSkips?: SessionSkip[]
+  /** מפגשים שהזמן שלהם עבר ולא יצא לתרגל: יורדים מהלוח, והתכנון משלים אותם בהמשך השבוע */
+  planDismissed?: SessionSkip[]
   /** היסטוריית ההזזות והדחיות, שממנה נלמדות העדפות */
   planFeedback?: PlanFeedback[]
   /** תאריכי הסמסטרים, פעם אחת לכל השיעורים של אותו סמסטר */

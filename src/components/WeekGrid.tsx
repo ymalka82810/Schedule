@@ -295,7 +295,10 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
             >
               <span className="day-name">{DAY_NAMES[day]}</span>
               <span className="day-date">{date.getDate()}</span>
-              <span className="day-hebrew">{info.hebrew}</span>
+              <span className="day-hebrew">
+                {info.hebrew.split(' ')[0]}
+                <span className="day-hebrew-month"> {info.hebrew.split(' ').slice(1).join(' ')}</span>
+              </span>
               {info.holiday && <span className="day-holiday">{info.holiday.name}</span>}
               {dayNotes?.[day] && <span className="day-holiday">{dayNotes[day]}</span>}
             </button>

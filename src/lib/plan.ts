@@ -1,6 +1,6 @@
 import type { DayIndex, Goal, Lesson, Minutes, PlanSettings, ScheduleData } from '../types'
 import { sameSubject } from './pdf/parseCell'
-import { isSubject } from './activity'
+import { isActivity, isSubject } from './activity'
 import { placeRoutines, type PlacedRoutine } from './routines'
 import { DAY_NAMES, dateOfDay, formatTime } from './time'
 import { isChag, isErev } from './hebrew'
@@ -68,6 +68,8 @@ export interface Busy {
   names?: string[]
   /** סוג השיעור לכל שם (הרצאה / תרגול / מעבדה), באותו סדר */
   kinds?: (string | undefined)[]
+  /** פעילות קבועה (אימון, עבודה): תופסת זמן, אבל לא קובעת את הנסיעה למוסד */
+  activity?: boolean
 }
 
 /** זמן שהתכנון שומר בצד: נסיעה למוסד וממנו, ושגרות כמו ארוחות ותפילות */
@@ -203,8 +205,10 @@ export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
   for (const e of data.entries) {
     const { date, moved: _m, ...slot } = placeOf(data, e.id, e.slot, weekStart)
     if (isCancelled(data, e.id, date) || !activeOn(lessons.get(e.lessonId), date, data.semesters)) continue
-    const name = lessons.get(e.lessonId)?.name ?? ''
-    out.push({ ...slot, label: name, kind: 'lesson', names: [name], kinds: [e.kind] })
+    const lesson = lessons.get(e.lessonId)
+    const name = lesson?.name ?? ''
+    const activity = !!lesson && isActivity(lesson)
+    out.push({ ...slot, label: name, kind: 'lesson', names: [name], kinds: [e.kind], ...(activity ? { activity } : {}) })
   }
   for (const g of data.choiceGroups) {
     const { date, moved: _m, ...slot } = placeOf(data, g.id, g.slot, weekStart)
@@ -214,7 +218,18 @@ export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
     )
     if (!ids.length) continue
     const names = ids.map((id) => lessons.get(id)?.name ?? '')
-    out.push({ ...slot, label: names.join(' / '), kind: 'lesson', names, kinds: ids.map((id) => g.kinds?.[id]) })
+    const activity = ids.every((id) => {
+      const l = lessons.get(id)
+      return !!l && isActivity(l)
+    })
+    out.push({
+      ...slot,
+      label: names.join(' / '),
+      kind: 'lesson',
+      names,
+      kinds: ids.map((id) => g.kinds?.[id]),
+      ...(activity ? { activity } : {}),
+    })
   }
   for (const ev of data.events) {
     const day = DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === ev.date)
@@ -264,10 +279,11 @@ export function weekFrame(
   const travel = s.travelMinutes ?? 0
   const reserved: Reserved[] = []
 
-  // נסיעה: לפני השיעור הראשון ביום ואחרי האחרון. בין שיעורים נשארים במוסד
+  // נסיעה: לפני השיעור הראשון ביום ואחרי האחרון. בין שיעורים נשארים במוסד.
+  // פעילות קבועה (אימון, עבודה) לא במוסד, ולכן לא מזיזה את הנסיעה
   if (travel > 0) {
     for (const day of DAYS_OF_WEEK) {
-      const lessons = busy.filter((b) => b.day === day && b.kind === 'lesson')
+      const lessons = busy.filter((b) => b.day === day && b.kind === 'lesson' && !b.activity)
       if (!lessons.length) continue
       const first = Math.min(...lessons.map((l) => l.start))
       const last = Math.max(...lessons.map((l) => l.end))
@@ -883,8 +899,6 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     for (const x of reference.sessions) {
       if (x.done || x.pinId || x.reviewId || !isPast(x)) continue
       const owner = goals.find((g) => g.id === x.goalId)
-      // יעד אוטומטי לא ביקשתי, ולכן לא מציגים בו פספוסים
-      if (owner?.auto) continue
       const since = owner?.since
       // גם ביום שבו נוצר: מה שתוכנן לפני השעה שבה נוצר הוא לא פספוס
       if (since && weekDateList[x.day] <= since) continue
@@ -894,7 +908,7 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
         ...x,
         id: `missed-${x.id}`,
         missed: true,
-        reasons: ['הזמן עבר ולא סומן שתרגלת. התכנון השלים את זה בהמשך השבוע. אם תרגלת בכל זאת, אפשר לסמן'],
+        reasons: ['הזמן של המפגש עבר. אם תרגלת, סמן וספר איך היה; אם לא, התכנון משלים את זה בהמשך השבוע'],
       })
     }
   }

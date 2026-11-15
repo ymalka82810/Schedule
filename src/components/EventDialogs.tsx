@@ -365,7 +365,7 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
           )}
 
           {session.missed && (
-            <p className="whoami-auto">הזמן של המפגש עבר ולא סומן. אם תרגלת בכל זאת, סמן כאן; אחרת התכנון כבר השלים אותו בהמשך השבוע.</p>
+            <p className="whoami-auto">המפגש הסתיים. אם תרגלת, ספר כאן איך היה וסמן; אם לא, התכנון כבר משלים אותו בהמשך השבוע.</p>
           )}
           {!session.done && !isReview && !session.missed && (
             <p className="muted">המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.</p>

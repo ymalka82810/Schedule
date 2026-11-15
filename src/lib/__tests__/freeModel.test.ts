@@ -52,6 +52,25 @@ describe('נסיעה', () => {
     expect(free[0].some((f) => f.start === h(14.75))).toBe(true)
     expect(free[1]).toEqual([{ start: DEFAULT_PLAN.dayStart, end: DEFAULT_PLAN.dayEnd }])
   })
+
+  it('אחרי השיעור האחרון במוסד, לא אחרי אימון שבא אחריו', () => {
+    const data = base(
+      { travelMinutes: 30 },
+      {
+        lessons: [lesson('ph', 'פיזיקה'), lesson('gym', 'אימון')],
+        entries: [
+          { id: 'e1', lessonId: 'ph', slot: { day: 0, start: h(10), end: h(14) } },
+          { id: 'e2', lessonId: 'gym', slot: { day: 0, start: h(18), end: h(19) } },
+          { id: 'e3', lessonId: 'gym', slot: { day: 1, start: h(18), end: h(19) } },
+        ],
+      },
+    )
+    const travel = weekFrame(data, WEEK).reserved.filter((r) => r.kind === 'travel')
+    expect(travel.map((r) => [r.day, r.start, r.end])).toEqual([
+      [0, h(9.5), h(10)],
+      [0, h(14), h(14.5)],
+    ])
+  })
 })
 
 describe('שגרות', () => {
@@ -111,6 +130,12 @@ describe('עבר ופספוסים', () => {
     const p = planWeek(logged, WEEK, '2026-11-17', h(15))
     expect(p.sessions.some((s) => s.done && s.day === 0)).toBe(true)
     expect(p.sessions.some((s) => s.missed && s.day === 0 && overlap(s, first))).toBe(false)
+  })
+
+  it('גם תרגול אוטומטי שהסתיים נשאר בלוח, כדי שאפשר יהיה לספר איך היה', () => {
+    const auto = base({}, { goals: [goal({ id: 'a', name: 'פיזיקה', auto: true, minHoursPerWeek: 5, maxHoursPerWeek: 5 })] })
+    const p = planWeek(auto, WEEK, '2026-11-17', h(15))
+    expect(p.sessions.some((s) => s.missed && s.goalId === 'a')).toBe(true)
   })
 
   it('שבוע שעבר כולו: רק מה שבוצע', () => {

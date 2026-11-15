@@ -79,7 +79,7 @@ function dropUnused(data: ScheduleData): ScheduleData {
   return { ...data, lessons: data.lessons.filter((l) => used.has(l.id)) }
 }
 
-export type LessonPatch = Partial<Pick<Lesson, 'name' | 'teacher' | 'room' | 'color' | 'validFrom' | 'validUntil' | 'semester'>>
+export type LessonPatch = Partial<Pick<Lesson, 'name' | 'teacher' | 'room' | 'color' | 'validFrom' | 'validUntil' | 'semester' | 'activity'>>
 
 /** שינוי פרטי השיעור. חל על כל השיבוצים שלו */
 export function updateLesson(data: ScheduleData, lessonId: string, patch: LessonPatch): ScheduleData {
@@ -131,6 +131,8 @@ export interface NewLesson {
   room?: string
   color: ColorKey
   slot: Slot
+  /** פעילות קבועה בלי תרגול (אימון, עבודה). חסר = לפי השם */
+  activity?: boolean
 }
 
 /**
@@ -145,6 +147,7 @@ export function addLesson(data: ScheduleData, input: NewLesson): ScheduleData {
   let lessons = data.lessons
   if (!lesson) {
     lesson = { id: newId('m', data.lessons.map((l) => l.id)), name, teacher, room, color: input.color, personal: true }
+    if (input.activity !== undefined) lesson.activity = input.activity
     lessons = [...lessons, lesson]
   }
   const ids = [...data.entries.map((e) => e.id), ...data.choiceGroups.map((g) => g.id)]

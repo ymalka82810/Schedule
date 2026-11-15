@@ -50,6 +50,11 @@ export interface Lesson {
   semester?: SemesterKey | 'all'
   /** שיעור אישי שלא מגיע מקובץ המערכת (למשל מיגו). ייבוא מקובץ לא מוחק אותו */
   personal?: boolean
+  /**
+   * פעילות קבועה (אימון, עבודה, חוג): תופסת זמן בלוח, אבל המערכת לא מתכננת לה תרגול.
+   * false = שיעור (מקצוע עם תרגול). חסר = לפי השם, ראו lib/activity.ts
+   */
+  activity?: boolean
   color: ColorKey
 }
 

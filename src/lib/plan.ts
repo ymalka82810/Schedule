@@ -1,5 +1,6 @@
 import type { DayIndex, Goal, Lesson, Minutes, PlanSettings, ScheduleData } from '../types'
 import { sameSubject } from './pdf/parseCell'
+import { isSubject } from './activity'
 import { placeRoutines, type PlacedRoutine } from './routines'
 import { DAY_NAMES, dateOfDay, formatTime } from './time'
 import { isChag, isErev } from './hebrew'
@@ -949,4 +950,4 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
 
 /** שמות המקצועות במערכת, לבחירת המקצוע של יעד */
 export const subjectNames = (lessons: Lesson[]) =>
-  [...new Set(lessons.filter((l) => !l.personal).map((l) => l.name.trim()))].sort((a, b) => a.localeCompare(b, 'he'))
+  [...new Set(lessons.filter(isSubject).map((l) => l.name.trim()))].sort((a, b) => a.localeCompare(b, 'he'))

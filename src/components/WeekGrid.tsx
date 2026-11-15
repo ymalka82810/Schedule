@@ -370,13 +370,14 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${b.isActivity ? ' is-activity' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
                     style={style}
                     {...click}
                     {...dragProps}
                   >
                     {b.isOption && <span className="block-tag">לבחירה</span>}
                     {b.isOpen && <span className="block-tag">לבחירתך</span>}
+                    {b.isActivity && <span className="block-tag">פעילות</span>}
                     {b.isCancelled && <span className="block-tag">{b.cancelTag ?? 'בוטל השבוע'}</span>}
                     {b.type === 'event' && <span className="block-tag">{b.cancelTag ?? 'אירוע'}</span>}
                     {b.type === 'plan' && (

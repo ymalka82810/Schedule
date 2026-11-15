@@ -1,6 +1,7 @@
 import type { Goal, ScheduleData } from '../types'
 import { KINDS, guessKind } from './learning'
 import { sameSubject } from './pdf/parseCell'
+import { isSubject } from './activity'
 
 /**
  * יעדים מוצעים מהמקצועות שאני באמת לומד (שיבוצים ובחירות שבחרתי), למקצועות שעוד אין להם יעד.
@@ -13,13 +14,13 @@ export interface GoalSuggestion {
   classMinutes: number
 }
 
-/** המקצועות שאני באמת לומד (שיבוצים ובחירות שבחרתי), לפי זמן השיעורים בשבוע */
+/** המקצועות שאני באמת לומד (גם שיעורים שהוספתי ידנית, בלי פעילויות קבועות כמו אימון) (שיבוצים ובחירות שבחרתי), לפי זמן השיעורים בשבוע */
 export function attendedSubjects(data: ScheduleData): string[] {
   return suggestGoals({ ...data, goals: [] }, { includeOff: true }).map((x) => x.subject)
 }
 
 export function suggestGoals(data: ScheduleData, opts: { includeOff?: boolean } = {}): GoalSuggestion[] {
-  const lessons = new Map(data.lessons.filter((l) => !l.personal).map((l) => [l.id, l]))
+  const lessons = new Map(data.lessons.filter(isSubject).map((l) => [l.id, l]))
   const minutes = new Map<string, { m: number; color: Goal['color'] }>()
   const add = (lessonId: string | null, m: number) => {
     const l = lessonId ? lessons.get(lessonId) : undefined

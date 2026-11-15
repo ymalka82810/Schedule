@@ -24,6 +24,7 @@ import {
 import { DAYS, DAY_NAMES, dateOfDay, formatTime, fromTimeInput, startOfWeek, toTimeInput } from '../lib/time'
 import { moveOf } from '../lib/plan'
 import { DayPicker } from './DayPicker'
+import { guessActivity, isActivity } from '../lib/activity'
 import { LESSON_KINDS } from '../lib/pdf/parseCell'
 import { SEMESTERS, SEMESTER_NAMES, lessonsOfSemester, semesterFromNote, semesterOf, setSemesterDates } from '../lib/semester'
 import type { SemesterKey } from '../types'
@@ -62,6 +63,13 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
     lesson?.name ?? (target?.kind === 'practice' ? target.window.name : ''),
   )
   const [teacher, setTeacher] = useState(lesson?.teacher ?? '')
+  /** שיעור (עם תרגול) או פעילות קבועה (אימון, עבודה: רק תופסת זמן). עד שבוחרים, לפי השם */
+  const [activity, setActivity] = useState(lesson ? isActivity(lesson) : false)
+  const [activityChosen, setActivityChosen] = useState(lesson?.activity !== undefined)
+  const changeName = (value: string) => {
+    setName(value)
+    if (!activityChosen) setActivity(guessActivity(value))
+  }
   const [room, setRoom] = useState(
     (target?.kind === 'entry' ? (target.entry.room ?? lesson?.room) : undefined) ??
       (target?.kind === 'practice' ? target.window.context : undefined) ??
@@ -112,7 +120,9 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
         ? 'משבצת בחירה'
         : target?.kind === 'practice'
           ? 'חלון תרגול'
-          : 'עריכת שיעור'
+          : activity
+            ? 'עריכת פעילות'
+            : 'עריכת שיעור'
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -134,7 +144,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
       const slots = days.map((day) => ({ day, ...(perDay ? timeOf(day) : { start: slot.start, end: slot.end }) }))
       next = asPractice
         ? addPracticeWindows(data, name, slots, room)
-        : addActivity(data, { name, teacher, room, color, slots })
+        : addActivity(data, { name, teacher, room, color, slots, activity })
     } else if (target?.kind === 'entry') {
       // שם, מרצה, חדר וצבע שייכים לשיעור ומשתנים בכל השיבוצים שלו. השעה רק בשיבוץ הזה
       const fromNote = semesterFromNote(target.lesson.note)
@@ -143,6 +153,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
         teacher: teacher.trim() || undefined,
         room: room.trim() || undefined,
         color,
+        activity,
         validFrom: validity === 'dates' ? validFrom || undefined : undefined,
         validUntil: validity === 'dates' ? validUntil || undefined : undefined,
         // סמסטר שזהה למה שכתוב בקובץ לא נשמר, כדי שתיקון בקובץ הבא ישפיע. "כל השנה" נשמר רק כשהקובץ אומר אחרת
@@ -238,17 +249,46 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
                   type="text"
                   value={name}
                   placeholder={asPractice ? 'תרגול חופשי' : undefined}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => changeName(e.target.value)}
                   autoFocus
                 />
               </label>
               {target?.kind !== 'practice' && !asPractice && (
+                <fieldset className="whoami-set">
+                  <legend>מה זה?</legend>
+                  <label className="whoami-option">
+                    <input
+                      type="radio"
+                      name="activity"
+                      checked={!activity}
+                      onChange={() => {
+                        setActivity(false)
+                        setActivityChosen(true)
+                      }}
+                    />
+                    <span>שיעור: מקצוע שלומדים, והמערכת משבצת לו תרגול בזמן הפנוי</span>
+                  </label>
+                  <label className="whoami-option">
+                    <input
+                      type="radio"
+                      name="activity"
+                      checked={activity}
+                      onChange={() => {
+                        setActivity(true)
+                        setActivityChosen(true)
+                      }}
+                    />
+                    <span>פעילות קבועה (אימון, עבודה, חוג): רק תופסת זמן, בלי תרגול</span>
+                  </label>
+                </fieldset>
+              )}
+              {target?.kind !== 'practice' && !asPractice && (
                 <label className="field">
-                  <span>מרצה</span>
+                  <span>{activity ? 'מאמן / אחראי (לא חובה)' : 'מרצה'}</span>
                   <input type="text" value={teacher} onChange={(e) => setTeacher(e.target.value)} />
                 </label>
               )}
-              {target?.kind === 'entry' && (
+              {target?.kind === 'entry' && !activity && (
                 <label className="field">
                   <span>סוג (לא חובה)</span>
                   <input

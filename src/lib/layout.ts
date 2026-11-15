@@ -4,6 +4,7 @@ import { activeOn, breakOn, isCancelled, placeOf, type PlannedSession, type Rese
 import type { Slot } from '../types'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
+import { isActivity } from './activity'
 
 /** בלוק אחד מוכן לציור בלוח */
 export interface Block {
@@ -36,6 +37,8 @@ export interface Block {
   isMoved?: boolean
   /** אפשר לגרור אותו לשעה אחרת */
   draggable?: boolean
+  /** פעילות קבועה (אימון, עבודה): תופסת זמן, בלי תרגול */
+  isActivity?: boolean
 }
 
 interface WeekOptions {
@@ -83,6 +86,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       teacher: l.teacher,
       room: e.room ?? l.room,
       kind: e.kind,
+      isActivity: isActivity(l),
       color: l.color,
       lane: 0,
       lanes: 1,

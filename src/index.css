@@ -320,6 +320,15 @@ p {
   );
 }
 
+/* פעילות קבועה (אימון, עבודה): פס צד רחב יותר ורקע חלש, כדי שיהיה ברור שזה לא שיעור עם תרגול */
+.block.is-activity {
+  background: color-mix(in oklab, var(--hue) calc(var(--fill-mix) / 2), var(--surface));
+}
+
+.block.is-activity .block-tag {
+  background: color-mix(in oklab, var(--hue) 55%, var(--surface));
+}
+
 .block-tag {
   display: inline-block;
   font-size: 0.75rem;

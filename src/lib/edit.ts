@@ -14,6 +14,7 @@ import type {
 } from '../types'
 import type { PlannedSession } from './plan'
 import { fromDotted } from './time'
+import { guessKind } from './learning'
 
 /**
  * עריכה ישירה של המערכת השמורה (שלב 2). כל פעולה מקבלת נתונים ומחזירה נתונים חדשים, בלי לשנות את המקור.
@@ -267,6 +268,42 @@ export function saveGoal(data: ScheduleData, goal: Omit<Goal, 'id'> & { id?: str
   const d = new Date()
   const since = goal.since ?? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   return { ...data, goals: [...data.goals, { ...goal, id, since }] }
+}
+
+/**
+ * פעילות קבועה שהופכת ליעד גמיש: השיבוצים הקבועים נמחקים, ובמקומם יעד עם אותן שעות בשבוע
+ * ואותו אורך מפגש, והמערכת מוצאת לו מקום בכל שבוע. אם כל הפעילות הייתה בערב (או בבוקר), היעד נשאר בערב (או בבוקר)
+ */
+export function activityToGoal(data: ScheduleData, lessonId: string): ScheduleData {
+  const lesson = data.lessons.find((l) => l.id === lessonId)
+  const entries = data.entries.filter((e) => e.lessonId === lessonId)
+  if (!lesson || !entries.length) return data
+  const lengths = entries.map((e) => e.slot.end - e.slot.start).sort((a, b) => a - b)
+  const total = lengths.reduce((a, b) => a + b, 0)
+  const hours = Math.max(0.5, Math.round((total / 60) * 2) / 2)
+  const session = lengths[Math.floor(lengths.length / 2)]
+  const evening = entries.every((e) => e.slot.start >= 17 * 60)
+  const morning = entries.every((e) => e.slot.end <= 12 * 60)
+  const ids = new Set(entries.map((e) => e.id))
+  const kind = guessKind(lesson.name)?.kind ?? 'skill'
+  const next = dropUnused({
+    ...data,
+    entries: data.entries.filter((e) => !ids.has(e.id)),
+    cancellations: (data.cancellations ?? []).filter((c) => !ids.has(c.refId)),
+    moves: (data.moves ?? []).filter((m) => !ids.has(m.refId)),
+  })
+  return saveGoal(next, {
+    name: lesson.name,
+    kind,
+    color: lesson.color,
+    minHoursPerWeek: hours,
+    maxHoursPerWeek: hours,
+    preferredWindows: [],
+    sessionMinutes: session,
+    maxPerDay: 1,
+    earliest: evening ? 17 * 60 : undefined,
+    latest: morning ? 12 * 60 : undefined,
+  })
 }
 
 export function removeGoal(data: ScheduleData, id: string): ScheduleData {

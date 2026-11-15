@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { emptyData } from '../../data/empty'
-import { addLesson, updateLesson } from '../edit'
+import { activityToGoal, addLesson, updateLesson } from '../edit'
 import { planWeek, subjectNames } from '../plan'
 import { guessActivity } from '../activity'
 import { allGoals } from '../suggest'
@@ -56,5 +56,21 @@ describe('שיעור מול פעילות קבועה', () => {
     expect(guessActivity('עבודה')).toBe(true)
     expect(guessActivity('מתמטיקה')).toBe(false)
     expect(guessActivity('תרגול פיזיקה')).toBe(false)
+  })
+
+  it('פעילות קבועה הופכת ליעד גמיש עם אותן שעות, ונשארת בערב', () => {
+    const d = manual()
+    const run = d.lessons.find((l) => l.name === 'אימון')!
+    const next = activityToGoal(d, run.id)
+    expect(next.lessons.some((l) => l.name === 'אימון')).toBe(false)
+    expect(next.entries.some((e) => e.lessonId === run.id)).toBe(false)
+    const g = next.goals.find((x) => x.name === 'אימון')!
+    expect(g.minHoursPerWeek).toBe(4)
+    expect(g.sessionMinutes).toBe(60)
+    expect(g.earliest).toBe(17 * 60)
+    const p = planWeek(next, WEEK, '2026-11-15', 8 * 60)
+    const mine = p.sessions.filter((s) => s.goalId === g.id)
+    expect(mine.length).toBeGreaterThan(0)
+    expect(mine.every((s) => s.start >= 17 * 60)).toBe(true)
   })
 })

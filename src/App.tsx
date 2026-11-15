@@ -475,6 +475,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           mode={dialog.mode}
           date={dialog.date}
           onSave={handleEdit}
+          onOpenGoals={() => setDialog({ kind: 'goals' })}
           onClose={() => setDialog(null)}
         />
       )}

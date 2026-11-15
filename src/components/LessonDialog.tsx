@@ -3,6 +3,7 @@ import type { ColorKey, DayIndex, ScheduleData, Slot } from '../types'
 import {
   COLORS,
   COLOR_NAMES,
+  activityToGoal,
   addActivity,
   addPracticeWindows,
   setActivityDays,
@@ -42,11 +43,13 @@ interface Props {
   date?: string
   onSave: (data: ScheduleData) => void
   onClose: () => void
+  /** אחרי שפעילות הפכה ליעד גמיש: פותחים את היעדים כדי לכוונן */
+  onOpenGoals?: () => void
 }
 
 
 /** עריכה של שיעור מהלוח, או הוספת שיעור חדש */
-export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
+export function LessonDialog({ data, mode, date, onSave, onClose, onOpenGoals }: Props) {
   const target = mode.kind === 'edit' ? mode.target : null
 
   const initialSlot: Slot =
@@ -189,6 +192,15 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
     if (refId && date) onSave(toggleCancellation(data, refId, date))
   }
 
+  const toGoal = () => {
+    if (!lesson) return
+    const n = data.entries.filter((e) => e.lessonId === lesson.id).length
+    const msg = `להפוך את "${lesson.name}" ליעד גמיש? ${n > 1 ? `${n} השיבוצים הקבועים יימחקו` : 'השיבוץ הקבוע יימחק'}, והמערכת תמצא לו מקום בכל שבוע, עם אותן שעות בשבוע.`
+    if (!window.confirm(msg)) return
+    onSave(activityToGoal(data, lesson.id))
+    onOpenGoals?.()
+  }
+
   const usesOfLesson = lesson ? data.entries.filter((e) => e.lessonId === lesson.id).length : 0
 
   return (
@@ -280,6 +292,14 @@ export function LessonDialog({ data, mode, date, onSave, onClose }: Props) {
                     />
                     <span>פעילות קבועה (אימון, עבודה, חוג): רק תופסת זמן, בלי תרגול</span>
                   </label>
+                  {lesson && activity && (
+                    <div className="import-note">
+                      <p>לא חייב להיות בשעה קבועה? אפשר להפוך ליעד גמיש (למשל 3 פעמים בשבוע בערב), והמערכת תמצא לו מקום בעצמה.</p>
+                      <button type="button" className="link-btn" onClick={toGoal}>
+                        להפוך ליעד גמיש
+                      </button>
+                    </div>
+                  )}
                 </fieldset>
               )}
               {target?.kind !== 'practice' && !asPractice && (

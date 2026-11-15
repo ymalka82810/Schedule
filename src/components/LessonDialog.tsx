@@ -23,7 +23,8 @@ import {
   type BlockTarget,
 } from '../lib/edit'
 import { DAYS, DAY_NAMES, dateOfDay, formatTime, fromTimeInput, startOfWeek, toTimeInput } from '../lib/time'
-import { moveOf } from '../lib/plan'
+import { moveOf, planSettings } from '../lib/plan'
+import { sameSubject } from '../lib/pdf/parseCell'
 import { DayPicker } from './DayPicker'
 import { guessActivity, isActivity } from '../lib/activity'
 import { LESSON_KINDS } from '../lib/pdf/parseCell'
@@ -69,6 +70,9 @@ export function LessonDialog({ data, mode, date, onSave, onClose, onOpenGoals }:
   /** שיעור (עם תרגול) או פעילות קבועה (אימון, עבודה: רק תופסת זמן). עד שבוחרים, לפי השם */
   const [activity, setActivity] = useState(lesson ? isActivity(lesson) : false)
   const [activityChosen, setActivityChosen] = useState(lesson?.activity !== undefined)
+  /** שיעור בלי תרגול: השיעור נשאר בלוח, אבל המערכת לא משבצת לו תרגול אוטומטי */
+  const offList = data.plan?.autoOff ?? []
+  const [noPractice, setNoPractice] = useState(!!lesson && offList.some((x) => sameSubject(x, lesson.name)))
   const changeName = (value: string) => {
     setName(value)
     if (!activityChosen) setActivity(guessActivity(value))
@@ -172,6 +176,13 @@ export function LessonDialog({ data, mode, date, onSave, onClose, onOpenGoals }:
       next = chooseOption(moveChoice(data, target.group.id, slot), target.group.id, chosen)
     } else if (target?.kind === 'practice') {
       next = updatePractice(data, target.window.id, { name: name.trim(), context: room.trim() || undefined, slot })
+    }
+    if (!asPractice && target?.kind !== 'practice' && target?.kind !== 'choice' && name.trim()) {
+      // השם הישן יוצא מהרשימה (גם אם השתנה), והחדש נכנס אם בחרתי "בלי תרגול"
+      const names = [lesson?.name, name.trim()].filter((x): x is string => !!x)
+      const rest = (next.plan?.autoOff ?? []).filter((x) => !names.some((n) => sameSubject(x, n)))
+      const list = noPractice && !activity ? [...rest, name.trim()] : rest
+      next = { ...next, plan: { ...planSettings(next), autoOff: list.length ? list : undefined } }
     }
     onSave(next)
   }
@@ -292,6 +303,12 @@ export function LessonDialog({ data, mode, date, onSave, onClose, onOpenGoals }:
                     />
                     <span>פעילות קבועה (אימון, עבודה, חוג): רק תופסת זמן, בלי תרגול</span>
                   </label>
+                  {!activity && (
+                    <label className="whoami-option">
+                      <input type="checkbox" checked={noPractice} onChange={(e) => setNoPractice(e.target.checked)} />
+                      <span>בלי תרגול: השיעור נשאר בלוח, אבל לא צריך לתרגל אותו בזמן הפנוי</span>
+                    </label>
+                  )}
                   {lesson && activity && (
                     <div className="import-note">
                       <p>לא חייב להיות בשעה קבועה? אפשר להפוך ליעד גמיש (למשל 3 פעמים בשבוע בערב), והמערכת תמצא לו מקום בעצמה.</p>

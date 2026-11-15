@@ -5,6 +5,7 @@ import type { Slot } from '../types'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
 import { isActivity } from './activity'
+import { sameSubject } from './pdf/parseCell'
 
 /** בלוק אחד מוכן לציור בלוח */
 export interface Block {
@@ -39,6 +40,8 @@ export interface Block {
   draggable?: boolean
   /** פעילות קבועה (אימון, עבודה): תופסת זמן, בלי תרגול */
   isActivity?: boolean
+  /** שיעור שסימנתי שלא צריך תרגול */
+  noPractice?: boolean
 }
 
 interface WeekOptions {
@@ -87,6 +90,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       room: e.room ?? l.room,
       kind: e.kind,
       isActivity: isActivity(l),
+      noPractice: !isActivity(l) && (data.plan?.autoOff ?? []).some((x) => sameSubject(x, l.name)),
       color: l.color,
       lane: 0,
       lanes: 1,

@@ -297,12 +297,61 @@ p {
   text-overflow: ellipsis;
 }
 
+/*
+ * מפגש קצר (פחות משעה): הכול בשורה אחת, השם והשעה קודם והתגית אחריהם.
+ * מה שלא נכנס יורד לשורה הבאה ונחתך, כך שהשם והשעה תמיד נראים
+ */
 .block.is-short {
   padding-block: 0.125rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  align-content: flex-start;
+  column-gap: 0.375rem;
 }
 
 .block.is-short .block-name {
+  order: 0;
   font-size: 0.9375rem;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.block.is-short .block-time {
+  order: 1;
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.block.is-short .block-tag {
+  order: 2;
+  margin-bottom: 0;
+  font-size: 0.6875rem;
+}
+
+/* חצי שעה ומטה: שורה אחת בלבד. השעה תמיד נראית, והשם מתקצר אם צריך */
+.block.is-tiny {
+  flex-wrap: nowrap;
+}
+
+.block.is-tiny .block-time {
+  flex-shrink: 0;
+}
+
+.block.is-tiny .block-tag,
+.block.is-tiny .block-kind {
+  display: none;
+}
+
+.block.is-tiny .block-name {
+  font-size: 0.8125rem;
+}
+
+.block.is-tiny .block-time {
+  font-size: 0.75rem;
 }
 
 .block.is-short .block-meta {

@@ -373,7 +373,7 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${b.isActivity ? ' is-activity' : ''}${duration < 60 ? ' is-short' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${b.isActivity ? ' is-activity' : ''}${duration < 60 ? ' is-short' : ''}${duration <= 30 ? ' is-tiny' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
                     style={style}
                     {...click}
                     {...dragProps}

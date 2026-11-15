@@ -5,6 +5,7 @@ import type { Slot } from '../types'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
 import { isActivity } from './activity'
+import { termTag } from './semester'
 import { sameSubject } from './pdf/parseCell'
 
 /** בלוק אחד מוכן לציור בלוח */
@@ -42,6 +43,8 @@ export interface Block {
   isActivity?: boolean
   /** שיעור שסימנתי שלא צריך תרגול */
   noPractice?: boolean
+  /** "שיעור אחרון" / "שיעור ראשון" בסמסטר או בתוקף של השיעור */
+  termTag?: string
 }
 
 interface WeekOptions {
@@ -70,6 +73,10 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
 
   // בשבוע מסוים: שיעור שלא בתוקף בתאריך שלו לא מוצג
   const inForce = (id: string, day: DayIndex) => !weekStart || activeOn(lessons.get(id), dateOfDay(weekStart, day), data.semesters)
+  const term = (id: string, day: DayIndex) => {
+    const l = lessons.get(id)
+    return weekStart && l ? termTag(l, dateOfDay(weekStart, day), data.semesters) : undefined
+  }
   /** המקום בשבוע המוצג: קבוע, או הוזז בשבוע הזה בלבד */
   const place = (refId: string, slot: Slot) => {
     if (!weekStart) return { slot, moved: false }
@@ -91,6 +98,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       kind: e.kind,
       isActivity: isActivity(l),
       noPractice: !isActivity(l) && (data.plan?.autoOff ?? []).some((x) => sameSubject(x, l.name)),
+      termTag: term(l.id, e.slot.day),
       color: l.color,
       lane: 0,
       lanes: 1,
@@ -119,6 +127,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
         teacher: l.teacher,
         room: l.room,
         kind: g.kinds?.[id],
+        termTag: g.chosenLessonId ? term(id, g.slot.day) : undefined,
         color: l.color,
         lane: i,
         lanes: ids.length,

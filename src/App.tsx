@@ -6,7 +6,10 @@ import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { EventDialog, SessionDialog } from './components/EventDialogs'
 import { GoalsDialog } from './components/GoalsDialog'
 import { GradesDialog } from './components/GradesDialog'
-import { selfReminder } from './lib/priority'
+import { CalendarDialog } from './components/CalendarDialog'
+import { declineText, declines, dismissDecline, selfReminder } from './lib/priority'
+import { SEMESTER_NAMES, termNotices } from './lib/semester'
+import { sameSubject } from './lib/pdf/parseCell'
 import { attendedSubjects } from './lib/suggest'
 import { Today } from './components/Today'
 import { activeWeek, breakOn, isWorkDay, planSettings, planWeek, type PlannedSession } from './lib/plan'
@@ -37,9 +40,10 @@ import { addDays, dateOfDay, formatWeekRange, isSameDay, isoDate, startOfWeek } 
 
 type Dialog =
   | { kind: 'lesson'; mode: LessonDialogMode; date?: string }
-  | { kind: 'event'; event: OneOffEvent | { date: string } }
+  | { kind: 'event'; event: OneOffEvent | { date: string; title?: string } }
   | { kind: 'session'; session: PlannedSession; goal: Goal }
   | { kind: 'goals' }
+  | { kind: 'calendar' }
   | { kind: 'grades'; week?: Date }
   | {
       kind: 'move'
@@ -131,6 +135,14 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const versionDays = useMemo(() => versionAge(data, todayIso), [data, todayIso])
   // תזכורת להערכה עצמית בסוף השבוע (או בתחילת הבא), כשחסרה למקצוע שאני לומד
   const selfDue = useMemo(() => selfReminder(data, now, attendedSubjects(data)), [data, now])
+  // מקצוע שירד שלוש פעמים ברצף: הצעה להגדיל יעד או לקבוע שעה עם המרצה
+  const declining = useMemo(() => declines(data, todayIso), [data, todayIso])
+  // מה נגמר או מתחיל בשבוע המוצג (סמסטר, או שיעור עם תאריכים משלו)
+  const terms = useMemo(() => termNotices(data, [0, 1, 2, 3, 4, 5, 6].map((d) => dateOfDay(weekStart, d))), [data, weekStart])
+  const teacherOf = (subject: string) => {
+    const mine = new Set([...data.entries.map((e) => e.lessonId), ...data.choiceGroups.map((g) => g.chosenLessonId)])
+    return data.lessons.find((l) => mine.has(l.id) && l.teacher && sameSubject(l.name, subject))?.teacher
+  }
 
   const current = activeWeek(data, now)
   const isThisWeek = isSameDay(weekStart, current.weekStart)
@@ -327,6 +339,10 @@ export default function App({ initialData, initialBackup, account, onPersist, in
             ציונים
           </button>
 
+          <button type="button" className="btn" onClick={() => setDialog({ kind: 'calendar' })}>
+            לוח שנה
+          </button>
+
           <button type="button" className="btn" onClick={() => setImporting(true)}>
             ייבוא וגיבוי
           </button>
@@ -399,6 +415,38 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         </section>
       )}
 
+      {declining.map((d) => {
+        const teacher = teacherOf(d.subject)
+        return (
+          <section key={d.subject} className="mode-note version-note" aria-label={`ירידה ב${d.subject}`}>
+            <p>
+              {d.subject} ירד שלוש פעמים ברצף (<bdi dir="ltr">{declineText(d)}</bdi>). התכנון כבר נותן לו יותר תרגול,
+              אבל אולי כדאי גם להגדיל את היעד, או לקבוע שעה עם {teacher ? `${teacher}` : 'המרצה'} כדי להבין מה לא מסתדר.
+            </p>
+            <div className="import-actions">
+              <button type="button" className="btn" onClick={() => setDialog({ kind: 'goals' })}>
+                הגדלת היעד
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  setDialog({
+                    kind: 'event',
+                    event: { date: newEventDate(), title: `שעה עם ${teacher ?? 'המרצה'} (${d.subject})` },
+                  })
+                }
+              >
+                שעה עם {teacher ? teacher : 'המרצה'}
+              </button>
+              <button type="button" className="link-btn" onClick={() => commit(dismissDecline(data, d), backup, 'הבנתי. אתריע שוב רק אם תהיה עוד ירידה')}>
+                הבנתי
+              </button>
+            </div>
+          </section>
+        )
+      })}
+
       {versionDays !== null && (
         <section className="mode-note version-note" aria-label="תזכורת לגרסה חדשה">
           <p>
@@ -454,6 +502,21 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         <p className="muted drag-hint">
           אפשר לגרור שיעור, אירוע או מפגש מתוכנן לשעה אחרת, ולשנות אורך מהקצה התחתון. בטלפון: לחיצה ארוכה ואז גרירה.
           במקלדת: חצים על בלוק מסומן, ו-Enter לאישור.
+        </p>
+      )}
+
+      {terms.length > 0 && (
+        <p className="mode-note term-note" role="note">
+          {terms
+            .map((t) => {
+              const date = `${Number(t.date.slice(8))}.${Number(t.date.slice(5, 7))}`
+              const what = t.semester && t.names.length > 1 ? `${SEMESTER_NAMES[t.semester]} (${t.names.join(', ')})` : t.names.join(', ')
+              return t.kind === 'ends' ? `השבוע האחרון של ${what}, עד ${date}.` : `${what} מתחיל השבוע, ב-${date}.`
+            })
+            .join(' ')}{' '}
+          <button type="button" className="link-btn" onClick={() => setDialog({ kind: 'calendar' })}>
+            לוח השנה
+          </button>
         </p>
       )}
 
@@ -525,6 +588,10 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       )}
       {dialog?.kind === 'goals' && (
         <GoalsDialog data={data} weekStart={weekStart} today={todayIso} onSave={handleEdit} onClose={() => setDialog(null)} />
+      )}
+
+      {dialog?.kind === 'calendar' && (
+        <CalendarDialog data={data} onSave={(next) => { commit(next, backup, 'לוח השנה נשמר'); setDialog(null) }} onClose={() => setDialog(null)} />
       )}
 
       {dialog?.kind === 'grades' && (

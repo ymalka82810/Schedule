@@ -17,13 +17,14 @@ import {
 } from '../lib/learning'
 import { subjectNames } from '../lib/plan'
 import { DAY_NAMES, formatTime, fromTimeInput, toTimeInput } from '../lib/time'
+import { knownTopics } from '../lib/priority'
 import { useEscape } from './useEscape'
 import { dismissMissed, skipPlanned, unpinPlanned } from '../lib/prefs'
 
 interface EventProps {
   data: ScheduleData
   /** קיים לעריכה, או תאריך התחלתי לחדש */
-  event: OneOffEvent | { date: string }
+  event: OneOffEvent | { date: string; title?: string }
   onSave: (data: ScheduleData) => void
   onClose: () => void
 }
@@ -39,7 +40,7 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
   const existing = 'id' in event ? event : null
   const subjects = subjectNames(data.lessons)
   const [kind, setKind] = useState<Kind>(existing?.examSubject ? 'exam' : 'event')
-  const [title, setTitle] = useState(existing?.title ?? '')
+  const [title, setTitle] = useState(existing?.title ?? ('title' in event ? (event.title ?? '') : ''))
   const [subject, setSubject] = useState(existing?.examSubject ?? subjects[0] ?? '')
   const [date, setDate] = useState(event.date)
   const [to, setTo] = useState(event.date)
@@ -340,7 +341,12 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
               {!isReview && (
                 <label className="field">
                   <span>{goal.kind === 'knowledge' ? 'מה למדתי (נושא חדש יקבל חזרות מרווחות)' : 'מה עשיתי'}</span>
-                  <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} />
+                  <input type="text" list="session-topics" value={topic} onChange={(e) => setTopic(e.target.value)} />
+                  <datalist id="session-topics">
+                    {knownTopics(data, goal.subject ?? goal.name, date).map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
                 </label>
               )}
               {!isReview && (

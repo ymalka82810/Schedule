@@ -1,6 +1,7 @@
 import type { Grade, ScheduleData } from '../types'
 import { newId } from './edit'
 import { sameSubject } from './pdf/parseCell'
+import { allGoals } from './suggest'
 
 /**
  * עדיפות בין המקצועות לפי הציונים האחרונים.
@@ -94,14 +95,25 @@ export function topicPriorities(data: ScheduleData, subject: string, asOf: strin
 export const weakTopics = (data: ScheduleData, subject: string, asOf: string) =>
   topicPriorities(data, subject, asOf).filter((t) => t.need >= 0.55)
 
-/** נושאים שכבר הוזנו במקצוע, להשלמה בטופס */
-export const knownTopics = (data: ScheduleData, subject: string) => [
-  ...new Set(
-    [
-      ...(data.grades ?? []).filter((g) => g.topic && sameSubject(g.subject, subject)).map((g) => topicKey(g.topic!)),
-    ],
-  ),
-]
+/**
+ * נושאים שכבר הוזנו במקצוע, להשלמה בטופס: מהציונים, וגם ממה שנכתב בסוף מפגשי תרגול ומהחזרות המרווחות.
+ * כך נושא שלמדתי מוצע בציון, ונושא מציון מוצע בסוף המפגש. החלשים ראשונים
+ */
+export function knownTopics(data: ScheduleData, subject: string, asOf?: string): string[] {
+  const goals = allGoals(data).filter((g) => sameSubject(g.subject ?? g.name, subject))
+  const ids = new Set(goals.map((g) => g.id))
+  const all = [
+    ...(data.grades ?? []).filter((g) => g.topic && sameSubject(g.subject, subject)).map((g) => g.topic!),
+    ...(data.log ?? []).filter((l) => l.topic && ids.has(l.goalId)).map((l) => l.topic!),
+    ...(data.reviews ?? []).filter((r) => r.topic && ids.has(r.goalId)).map((r) => r.topic),
+  ]
+    .map(topicKey)
+    .filter(Boolean)
+  const unique = [...new Set(all)]
+  if (!asOf) return unique
+  const weak = weakTopics(data, subject, asOf).map((t) => t.topic)
+  return [...weak.filter((t) => unique.includes(t)), ...unique.filter((t) => !weak.includes(t))]
+}
 
 /**
  * תזכורת להערכה עצמית: מחמישי אחר הצהריים ועד מוצאי שבת על השבוע הנוכחי,
@@ -152,3 +164,44 @@ export function setWeeklySelf(data: ScheduleData, subject: string, weekDates: st
   // תאריך ההערכה: סוף השבוע (חמישי), כדי שתשקף את כל השבוע
   return saveGrade(data, { ...existing, subject, kind: 'self', score, date: existing?.date ?? weekDates[4] })
 }
+
+/** כמה ירידות ברצף מפעילות התראה */
+export const DECLINE_STREAK = 3
+
+export interface Decline {
+  subject: string
+  /** הציונים של הרצף, מהישן לחדש (DECLINE_STREAK + 1) */
+  grades: Grade[]
+}
+
+/**
+ * מקצועות שירדו שלוש פעמים ברצף: ארבעת הציונים האחרונים (מבחנים והערכות עצמיות, לפי הרמה) יורדים כל פעם.
+ * לא מתריעים שוב על אותו רצף אחרי "הבנתי" (declineSkip שומר את הציון האחרון ברצף)
+ */
+export function declines(data: ScheduleData, asOf: string): Decline[] {
+  const bySubject = new Map<string, Grade[]>()
+  for (const g of recent(data, asOf)) {
+    const key = [...bySubject.keys()].find((k) => sameSubject(k, g.subject)) ?? g.subject
+    bySubject.set(key, [...(bySubject.get(key) ?? []), g])
+  }
+  const out: Decline[] = []
+  for (const [subject, list] of bySubject) {
+    const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
+    const tail = sorted.slice(-(DECLINE_STREAK + 1))
+    if (tail.length < DECLINE_STREAK + 1) continue
+    if (!tail.every((g, i) => i === 0 || levelOf(g) < levelOf(tail[i - 1]))) continue
+    if ((data.declineSkip ?? []).includes(tail[tail.length - 1].id)) continue
+    out.push({ subject, grades: tail })
+  }
+  return out
+}
+
+/** "הבנתי": לא להתריע שוב על הרצף הזה. ירידה נוספת תתריע מחדש */
+export const dismissDecline = (data: ScheduleData, d: Decline): ScheduleData => ({
+  ...data,
+  declineSkip: [...(data.declineSkip ?? []), d.grades[d.grades.length - 1].id].slice(-30),
+})
+
+/** תיאור קצר של הרצף: "80 ← 72 ← 65 ← 58" */
+export const declineText = (d: Decline) =>
+  d.grades.map((g) => (g.kind === 'exam' ? String(g.score) : `${g.score}/5`)).join(' ← ')

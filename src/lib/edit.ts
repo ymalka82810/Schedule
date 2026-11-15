@@ -430,13 +430,13 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     practiceWindows: Array.isArray(data.practiceWindows) ? (data.practiceWindows as PracticeWindow[]) : [],
     goals: Array.isArray(data.goals) ? (data.goals as ScheduleData['goals']) : [],
     events: Array.isArray(data.events) ? (data.events as ScheduleData['events']) : [],
-    ...(Array.isArray(data.cancellations) ? { cancellations: data.cancellations as ScheduleData['cancellations'] } : {}),
     ...(isObj(data.plan) ? { plan: data.plan as unknown as ScheduleData['plan'] } : {}),
-    ...(Array.isArray(data.log) ? { log: data.log as ScheduleData['log'] } : {}),
-    ...(Array.isArray(data.reviews) ? { reviews: data.reviews as ScheduleData['reviews'] } : {}),
-    ...(Array.isArray(data.breaks) ? { breaks: data.breaks as ScheduleData['breaks'] } : {}),
+    ...(isObj(data.semesters) ? { semesters: data.semesters as ScheduleData['semesters'] } : {}),
+    ...(typeof data.selfRemindSkip === 'string' ? { selfRemindSkip: data.selfRemindSkip } : {}),
     settings: data.settings as unknown as ScheduleData['settings'],
   }
+  // כל הרשימות האופציונליות עוברות כמו שהן, כדי שגיבוי ישחזר גם ציונים, הזזות והעדפות שנלמדו
+  for (const key of BACKUP_LISTS) if (Array.isArray(data[key])) (full as unknown as Record<string, unknown>)[key] = data[key]
   if (isObj(data.wizard) && isObj(data.wizard.subjects) && isObj(data.wizard.variants)) {
     full.wizard = data.wizard as unknown as ScheduleData['wizard']
   }
@@ -445,6 +445,21 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
   if (full.entries.some((e) => !lessonIds.has(e.lessonId))) return { error: 'בקובץ יש שיבוץ לשיעור שלא קיים.' }
   return { data: full }
 }
+
+/** הרשימות האופציונליות שנשמרות בגיבוי */
+const BACKUP_LISTS = [
+  'cancellations',
+  'moves',
+  'planPins',
+  'planSkips',
+  'planDismissed',
+  'planFeedback',
+  'grades',
+  'declineSkip',
+  'breaks',
+  'log',
+  'reviews',
+] as const satisfies ReadonlyArray<keyof ScheduleData>
 
 /** אחרי כמה ימים מתאריך הגרסה להזכיר לבדוק אם המוסד שלח גרסה חדשה */
 export const VERSION_REMINDER_DAYS = 21

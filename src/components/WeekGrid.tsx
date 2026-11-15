@@ -382,6 +382,7 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                     {b.isOpen && <span className="block-tag">לבחירתך</span>}
                     {b.isActivity && <span className="block-tag">פעילות</span>}
                     {b.noPractice && <span className="block-tag">בלי תרגול</span>}
+                    {b.termTag && !b.isCancelled && <span className="block-tag">{b.termTag}</span>}
                     {b.isCancelled && <span className="block-tag">{b.cancelTag ?? 'בוטל השבוע'}</span>}
                     {b.type === 'event' && <span className="block-tag">{b.cancelTag ?? 'אירוע'}</span>}
                     {b.type === 'plan' && (

@@ -366,6 +366,8 @@ export interface ScheduleData {
   semesters?: Partial<Record<SemesterKey, DateRange>>
   /** ציונים והערכות עצמיות, שמהם נקבעת העדיפות בין המקצועות */
   grades?: Grade[]
+  /** הציון האחרון ברצף ירידה שכבר אמרתי עליו "הבנתי", כדי לא להתריע שוב על אותו רצף */
+  declineSkip?: string[]
   /** YYYY-MM-DD (ראשון של השבוע): לא להזכיר הערכה עצמית לשבוע הזה */
   selfRemindSkip?: string
   /** חופשות: אין שיעורים, אבל מתכננים כרגיל */

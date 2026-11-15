@@ -1857,3 +1857,30 @@ body.is-dragging * {
 .pc-key svg {
   vertical-align: middle;
 }
+
+/* ---------- לוח השנה ---------- */
+.calendar-row {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.calendar-row:last-of-type {
+  border-bottom: none;
+}
+.calendar-row-title {
+  margin: 0 0 0.25rem;
+}
+.calendar-row .edit-row {
+  align-items: end;
+  flex-wrap: wrap;
+}
+.term-note {
+  border-style: solid;
+  color: inherit;
+}
+.prio-warn {
+  font-size: 0.875rem;
+  color: #b3261e;
+}
+:root[data-theme='dark'] .prio-warn {
+  color: #ff8a80;
+}

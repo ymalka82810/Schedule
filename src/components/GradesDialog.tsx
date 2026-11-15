@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ScheduleData } from '../types'
 import { attendedSubjects } from '../lib/suggest'
-import { gradeText, knownTopics, needFactor, priorities, removeGrade, saveGrade, setWeeklySelf, weakTopics } from '../lib/priority'
+import { declineText, declines, gradeText, knownTopics, needFactor, priorities, removeGrade, saveGrade, setWeeklySelf, weakTopics } from '../lib/priority'
 import { ProgressChart } from './ProgressChart'
 import type { ColorKey } from '../types'
 import { sameSubject } from '../lib/pdf/parseCell'
@@ -32,6 +32,8 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
   const [draft, setDraft] = useState(data)
   const subjects = useMemo(() => attendedSubjects(draft), [draft])
   const prio = useMemo(() => priorities(draft, today), [draft, today])
+  // כאן מציגים כל רצף ירידה, גם כזה שכבר אמרתי עליו "הבנתי" בלוח
+  const falling = useMemo(() => declines({ ...draft, declineSkip: [] }, today), [draft, today])
   // הערכה עצמית: ברירת המחדל היא השבוע של היום (במוצאי שבת, השבוע שנגמר עכשיו)
   const [week, setWeek] = useState(() => initialWeek ?? startOfWeek(toDate(today)))
   const weekDates = [0, 1, 2, 3, 4, 5, 6].map((d) => dateOfDay(week, d))
@@ -104,6 +106,13 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
                         {pct === 0 ? 'תרגול רגיל' : `התרגול האוטומטי ${pct > 0 ? 'גדל' : 'קטן'} ב-${Math.abs(pct)}%`}
                         {i === 0 && p.need >= 0.4 ? ', ראשון בחלונות התרגול החופשי' : ''}
                       </div>
+                      {falling.some((d) => d.subject === p.subject) && (
+                        <div className="prio-warn">
+                          ירד שלוש פעמים ברצף (
+                          <bdi dir="ltr">{declineText(falling.find((d) => d.subject === p.subject)!)}</bdi>). כדאי להגדיל
+                          את היעד או לקבוע שעה עם המרצה.
+                        </div>
+                      )}
                       {weakTopics(draft, p.subject, today).length > 0 && (
                         <div className="muted">
                           נושאים לחזק: {weakTopics(draft, p.subject, today).map((t) => t.topic).join(', ')}
@@ -215,7 +224,7 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
               <span>נושא (לא חובה), למשל "וקטורים". מנושא חלש המערכת תמליץ במה להתמקד בתרגול</span>
               <input type="text" list="grade-topics" value={topic} onChange={(e) => setTopic(e.target.value)} />
               <datalist id="grade-topics">
-                {knownTopics(draft, subject).map((t) => (
+                {knownTopics(draft, subject, today).map((t) => (
                   <option key={t} value={t} />
                 ))}
               </datalist>

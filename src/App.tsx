@@ -7,7 +7,7 @@ import { EventDialog, SessionDialog } from './components/EventDialogs'
 import { GoalsDialog } from './components/GoalsDialog'
 import { GradesDialog } from './components/GradesDialog'
 import { CalendarDialog } from './components/CalendarDialog'
-import { declineText, declines, dismissDecline, selfReminder } from './lib/priority'
+import { declineName, declineText, declines, dismissDecline, selfReminder } from './lib/priority'
 import { SEMESTER_NAMES, termNotices } from './lib/semester'
 import { sameSubject } from './lib/pdf/parseCell'
 import { attendedSubjects } from './lib/suggest'
@@ -418,10 +418,12 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       {declining.map((d) => {
         const teacher = teacherOf(d.subject)
         return (
-          <section key={d.subject} className="mode-note version-note" aria-label={`ירידה ב${d.subject}`}>
+          <section key={`${d.subject}:${d.topic ?? ''}`} className="mode-note version-note" aria-label={`ירידה ב${declineName(d)}`}>
             <p>
-              {d.subject} ירד שלוש פעמים ברצף (<bdi dir="ltr">{declineText(d)}</bdi>). התכנון כבר נותן לו יותר תרגול,
-              אבל אולי כדאי גם להגדיל את היעד, או לקבוע שעה עם {teacher ? `${teacher}` : 'המרצה'} כדי להבין מה לא מסתדר.
+              {declineName(d)} ירד שלוש פעמים ברצף (<bdi dir="ltr">{declineText(d)}</bdi>).{' '}
+              {d.topic
+                ? `מפגשי התרגול ב${d.subject} כבר מתמקדים בנושא הזה, אבל אולי כדאי גם להגדיל את היעד, או לשאול את ${teacher ?? 'המרצה'} עליו.`
+                : `התכנון כבר נותן לו יותר תרגול, אבל אולי כדאי גם להגדיל את היעד, או לקבוע שעה עם ${teacher ?? 'המרצה'} כדי להבין מה לא מסתדר.`}
             </p>
             <div className="import-actions">
               <button type="button" className="btn" onClick={() => setDialog({ kind: 'goals' })}>
@@ -433,7 +435,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
                 onClick={() =>
                   setDialog({
                     kind: 'event',
-                    event: { date: newEventDate(), title: `שעה עם ${teacher ?? 'המרצה'} (${d.subject})` },
+                    event: { date: newEventDate(), title: `שעה עם ${teacher ?? 'המרצה'} (${declineName(d)})` },
                   })
                 }
               >

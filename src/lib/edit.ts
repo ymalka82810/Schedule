@@ -422,7 +422,9 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     if (!Array.isArray(data[key])) return { error: `בקובץ חסר החלק "${key}".` }
   }
   if (!isObj(data.settings)) return { error: 'בקובץ חסרות ההגדרות.' }
-  const full: ScheduleData = {
+  // כל השדות עוברים כמו שהם (גם שדות שיתווספו בעתיד), והשדות החובה מקבלים ברירת מחדל
+  const full = {
+    ...data,
     version: 1,
     lessons: data.lessons as Lesson[],
     entries: data.entries as FixedEntry[],
@@ -430,17 +432,12 @@ export function fromBackup(text: string): { data: ScheduleData } | { error: stri
     practiceWindows: Array.isArray(data.practiceWindows) ? (data.practiceWindows as PracticeWindow[]) : [],
     goals: Array.isArray(data.goals) ? (data.goals as ScheduleData['goals']) : [],
     events: Array.isArray(data.events) ? (data.events as ScheduleData['events']) : [],
-    ...(isObj(data.plan) ? { plan: data.plan as unknown as ScheduleData['plan'] } : {}),
-    ...(isObj(data.semesters) ? { semesters: data.semesters as ScheduleData['semesters'] } : {}),
-    ...(typeof data.selfRemindSkip === 'string' ? { selfRemindSkip: data.selfRemindSkip } : {}),
     settings: data.settings as unknown as ScheduleData['settings'],
-  }
-  // כל הרשימות האופציונליות עוברות כמו שהן, כדי שגיבוי ישחזר גם ציונים, הזזות והעדפות שנלמדו
-  for (const key of BACKUP_LISTS) if (Array.isArray(data[key])) (full as unknown as Record<string, unknown>)[key] = data[key]
-  if (isObj(data.wizard) && isObj(data.wizard.subjects) && isObj(data.wizard.variants)) {
-    full.wizard = data.wizard as unknown as ScheduleData['wizard']
-  }
-  if (isObj(data.source)) full.source = data.source as unknown as ScheduleData['source']
+  } as ScheduleData
+  // שדות אופציונליים פגומים נזרקים במקום לשבור את האתר
+  for (const key of BACKUP_LISTS) if (key in full && !Array.isArray(full[key])) delete full[key]
+  for (const key of ['plan', 'semesters', 'wizard', 'source'] as const) if (key in full && !isObj(full[key])) delete full[key]
+  if (full.wizard && !(isObj(full.wizard.subjects) && isObj(full.wizard.variants))) delete full.wizard
   const lessonIds = new Set(full.lessons.map((l) => l.id))
   if (full.entries.some((e) => !lessonIds.has(e.lessonId))) return { error: 'בקובץ יש שיבוץ לשיעור שלא קיים.' }
   return { data: full }

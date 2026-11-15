@@ -6,7 +6,7 @@ import { DAY_NAMES, dateOfDay, formatTime } from './time'
 import { isChag, isErev } from './hebrew'
 import { INTERVALS, KINDS, MAX_REVIEWS_PER_DAY, REVIEW_MINUTES, intervalText, maxPerDay, sessionLength } from './learning'
 import { learnedPrefs, prefScore } from './prefs'
-import { validRange } from './semester'
+import { validRange, courseEnd } from './semester'
 import { allGoals } from './suggest'
 import { needFactor, priorities, priorityOf, weakTopics, type SubjectPriority } from './priority'
 import type { Slot } from '../types'
@@ -505,6 +505,21 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
     const [y, m, d] = exams[0].date.split('-')
     boosts.set(g.id, { factor: 1.5, note: `לקראת המבחן ב-${Number(d)}.${Number(m)}.${y}`, exams })
   }
+  // שבועיים אחרונים של קורס (סמסטר א' בלבד וכד'), בלי מבחן שהוזן: יותר תרגול ומפגש חזרה כללית אחד בשבוע
+  const courseEnds = new Map<string, string>()
+  for (const g of goals) {
+    if (!g.subject || boosts.has(g.id)) continue
+    const end = courseEnd(data, g.subject)
+    if (!end) continue
+    const left = dayDiff(weekDateList[0], end)
+    if (left < 0 || left > 13) continue
+    courseEnds.set(g.id, end)
+    boosts.set(g.id, {
+      factor: 1.25,
+      note: `הקורס נגמר ב-${Number(end.slice(8))}.${Number(end.slice(5, 7))}. אם יש מבחן סיום, כדאי להוסיף אותו`,
+      exams: [],
+    })
+  }
   // יעד עם תאריך יעד: המינימום והמקסימום הם החלק של השבוע מהשעות שנשארו
   const baseMin = (g: Goal) => deadlines.get(g.id)?.weekly ?? g.minHoursPerWeek
   const baseMax = (g: Goal) => deadlines.get(g.id)?.weekly ?? g.maxHoursPerWeek
@@ -934,6 +949,20 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
         x.title = `${g.name}: ${t.topic}`
         x.reasons = [...x.reasons, `במה להתמקד: ${t.topic} (${t.reason})`]
       })
+  }
+
+  // סוף קורס: המפגש הראשון שעוד לא בוצע בשבוע הוא חזרה כללית על כל החומר
+  for (const [goalId, end] of courseEnds) {
+    const g = goals.find((x) => x.id === goalId)!
+    const first = sessions
+      .filter((x) => x.goalId === goalId && !x.reviewId && !x.done)
+      .sort((a, b) => a.day - b.day || a.start - b.start)[0]
+    if (!first) continue
+    first.title = `${g.name}: חזרה כללית`
+    first.reasons = [
+      ...first.reasons,
+      `הקורס נגמר ב-${Number(end.slice(8))}.${Number(end.slice(5, 7))}: חזרה כללית על כל החומר, בשליפה מהזיכרון (לפתור בלי להציץ)`,
+    ]
   }
 
   const all = [...sessions, ...missed].sort((a, b) => a.day - b.day || a.start - b.start)

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { initialData } from '../../data/initial'
 import { buildBlocks } from '../layout'
-import { semesterProblems, termNotices, termTag } from '../semester'
-import { declineText, declines, dismissDecline, knownTopics, saveGrade } from '../priority'
+import { courseEnd, semesterProblems, termNotices, termTag } from '../semester'
+import { planWeek } from '../plan'
+import { declineName, declineText, declines, dismissDecline, knownTopics, saveGrade } from '../priority'
 import { fromBackup, toBackup } from '../edit'
 import { autoGoalId } from '../suggest'
 import { dateOfDay } from '../time'
@@ -98,22 +99,103 @@ describe('נושאים משותפים לציונים ולמפגשים', () => {
 })
 
 describe('גיבוי', () => {
-  it('משחזר גם ציונים, תאריכי סמסטר, הזזות והעדפות', () => {
-    const data: ScheduleData = {
-      ...saveGrade(initialData, { subject: 'פיזיקה', score: 80, date: '2026-11-01', kind: 'exam' }),
-      semesters: { a: { from: '2026-10-18', to: '2027-01-29' } },
-      moves: [{ id: 'm1', refId: 'e1', date: '2026-11-16', toDate: '2026-11-16', start: 600, end: 690 }],
-      planFeedback: [],
-      declineSkip: ['grade1'],
-      selfRemindSkip: '2026-11-08',
-    } as ScheduleData
-    const back = fromBackup(toBackup(data))
-    expect('data' in back && back.data).toMatchObject({
-      grades: data.grades,
-      semesters: data.semesters,
-      moves: data.moves,
-      declineSkip: ['grade1'],
-      selfRemindSkip: '2026-11-08',
-    })
+  /**
+   * Required<ScheduleData>: שדה חדש ב-ScheduleData שלא נוסף כאן שובר את הבנייה,
+   * וכך הבדיקה מוודאת שכל שדה עובר בגיבוי ולא הולך לאיבוד
+   */
+  const every: Required<ScheduleData> = {
+    ...initialData,
+    cancellations: [{ refId: 'e1', date: '2026-11-16' }] as ScheduleData['cancellations'] & object,
+    moves: [{ id: 'm1', refId: 'e1', date: '2026-11-16', toDate: '2026-11-16', start: 600, end: 690 }],
+    planPins: [{ id: 'pin' }] as unknown as Required<ScheduleData>['planPins'],
+    planSkips: [{ id: 'skip' }] as unknown as Required<ScheduleData>['planSkips'],
+    planDismissed: [{ id: 'dis' }] as unknown as Required<ScheduleData>['planDismissed'],
+    planFeedback: [{ id: 'fb' }] as unknown as Required<ScheduleData>['planFeedback'],
+    semesters: { a: { from: '2026-10-18', to: '2027-01-29' } },
+    grades: [{ id: 'g1', subject: 'פיזיקה', score: 80, date: '2026-11-01', kind: 'exam' }],
+    declineSkip: ['g1'],
+    selfRemindSkip: '2026-11-08',
+    breaks: [{ id: 'br1', title: 'חנוכה', from: '2026-12-06', to: '2026-12-11' }],
+    log: [{ id: 'l1', goalId: 'x', date: '2026-11-10', start: 600, end: 660 }],
+    reviews: [{ id: 'r1', goalId: 'x', topic: 'וקטורים', due: '2026-11-12', step: 0 }],
+    plan: { ...(initialData.plan ?? {}) } as Required<ScheduleData>['plan'],
+    wizard: { subjects: { פיזיקה: true }, variants: { פיזיקה: 'קסל' } },
+    source: { fileName: 'm.pdf', importedAt: '2026-10-20T10:00:00Z' },
+  }
+
+  it('כל שדה ב-ScheduleData חוזר מהגיבוי כמו שהוא', () => {
+    const back = fromBackup(toBackup(every))
+    expect('data' in back && back.data).toEqual(every)
+  })
+
+  it('שדה פגום נזרק בלי לשבור את הטעינה', () => {
+    const back = fromBackup(JSON.stringify({ ...every, grades: 'x', semesters: [1] }))
+    expect('data' in back).toBe(true)
+    if ('data' in back) {
+      expect(back.data.grades).toBeUndefined()
+      expect(back.data.semesters).toBeUndefined()
+      expect(back.data.log).toEqual(every.log)
+    }
+  })
+})
+
+describe('סוף קורס בתכנון', () => {
+  const data: ScheduleData = {
+    ...initialData,
+    lessons: initialData.lessons.map((l) => (l.id === 'writing' ? { ...l, semester: 'a' } : l)),
+    semesters: { a: { from: '2026-10-18', to: '2027-01-29' } },
+  }
+
+  it('קורס שנגמר: מתי, ורק כשכל השיעורים במקצוע מוגבלים בזמן', () => {
+    expect(courseEnd(data, 'כתיבה מדעית')).toBe('2027-01-29')
+    expect(courseEnd(data, 'פיזיקה')).toBeUndefined()
+  })
+
+  it('בשבועיים האחרונים: יותר תרגול ומפגש חזרה כללית, עם הסבר', () => {
+    const before = planWeek(data, new Date(2027, 0, 3), '2027-01-01', 0)
+    const last = planWeek(data, new Date(2027, 0, 17), '2027-01-01', 0)
+    const goal = autoGoalId('כתיבה מדעית')
+    const mins = (p: typeof last) => p.sessions.filter((x) => x.goalId === goal).reduce((m, x) => m + x.end - x.start, 0)
+    expect(mins(last)).toBeGreaterThan(mins(before))
+    expect(last.report.find((r) => r.goalId === goal)?.boost).toContain('הקורס נגמר ב-29.1')
+    const review = last.sessions.filter((x) => x.title?.includes('חזרה כללית'))
+    expect(review).toHaveLength(1)
+    expect(review[0].goalId).toBe(goal)
+    expect(before.sessions.some((x) => x.title?.includes('חזרה כללית'))).toBe(false)
+  })
+
+  it('מבחן שהוזן גובר על סוף הקורס', () => {
+    const withExam = { ...data, events: [{ id: 'ex', title: 'מבחן', date: '2027-01-27', start: 540, end: 720, examSubject: 'כתיבה מדעית' }] }
+    const p = planWeek(withExam, new Date(2027, 0, 17), '2027-01-01', 0)
+    expect(p.report.find((r) => r.goalId === autoGoalId('כתיבה מדעית'))?.boost).toContain('לקראת המבחן')
+    expect(p.sessions.some((x) => x.title?.includes('חזרה כללית'))).toBe(false)
+  })
+})
+
+describe('ירידה בנושא', () => {
+  const data = [90, 80, 70, 60].reduce(
+    (d, score, i) =>
+      saveGrade(d, { subject: 'פיזיקה', score, date: `2026-11-0${i + 1}`, kind: 'exam', topic: i % 2 ? 'וקטורים ' : 'וקטורים' }),
+    // ציונים אחרים במקצוע בלי נושא, כך שהמקצוע כולו לא יורד ברצף
+    saveGrade(initialData, { subject: 'פיזיקה', score: 95, date: '2026-11-03', kind: 'exam' }),
+  )
+
+  it('נושא שירד שלוש פעמים ברצף מתריע, גם כשהמקצוע כולו לא', () => {
+    const d = declines(data, '2026-11-14')
+    expect(d.map((x) => [x.subject, x.topic])).toEqual([['פיזיקה', 'וקטורים']])
+    expect(declineName(d[0])).toBe('וקטורים בפיזיקה')
+  })
+
+  it('"הבנתי" על הנושא משתיק רק אותו', () => {
+    const quiet = dismissDecline(data, declines(data, '2026-11-14')[0])
+    expect(declines(quiet, '2026-11-14')).toEqual([])
+  })
+
+  it('כשגם המקצוע וגם הנושא יורדים על אותם ציונים, התראה אחת', () => {
+    const only = [90, 80, 70, 60].reduce(
+      (d, score, i) => saveGrade(d, { subject: 'פיזיקה', score, date: `2026-11-0${i + 1}`, kind: 'exam', topic: 'וקטורים' }),
+      initialData,
+    )
+    expect(declines(only, '2026-11-14').map((x) => x.topic)).toEqual([undefined])
   })
 })

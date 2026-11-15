@@ -106,13 +106,14 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
                         {pct === 0 ? 'תרגול רגיל' : `התרגול האוטומטי ${pct > 0 ? 'גדל' : 'קטן'} ב-${Math.abs(pct)}%`}
                         {i === 0 && p.need >= 0.4 ? ', ראשון בחלונות התרגול החופשי' : ''}
                       </div>
-                      {falling.some((d) => d.subject === p.subject) && (
-                        <div className="prio-warn">
-                          ירד שלוש פעמים ברצף (
-                          <bdi dir="ltr">{declineText(falling.find((d) => d.subject === p.subject)!)}</bdi>). כדאי להגדיל
-                          את היעד או לקבוע שעה עם המרצה.
-                        </div>
-                      )}
+                      {falling
+                        .filter((d) => d.subject === p.subject)
+                        .map((d) => (
+                          <div key={d.topic ?? ''} className="prio-warn">
+                            {d.topic ? `${d.topic} ירד` : 'ירד'} שלוש פעמים ברצף (<bdi dir="ltr">{declineText(d)}</bdi>).
+                            {d.topic ? ' כדאי לשאול את המרצה על הנושא.' : ' כדאי להגדיל את היעד או לקבוע שעה עם המרצה.'}
+                          </div>
+                        ))}
                       {weakTopics(draft, p.subject, today).length > 0 && (
                         <div className="muted">
                           נושאים לחזק: {weakTopics(draft, p.subject, today).map((t) => t.topic).join(', ')}

@@ -170,13 +170,24 @@ export const DECLINE_STREAK = 3
 
 export interface Decline {
   subject: string
+  /** נושא בתוך המקצוע (וקטורים), כשהירידה היא בנושא ולא במקצוע כולו */
+  topic?: string
   /** הציונים של הרצף, מהישן לחדש (DECLINE_STREAK + 1) */
   grades: Grade[]
 }
 
+const falling = (list: Grade[]) => {
+  const tail = [...list].sort((a, b) => a.date.localeCompare(b.date)).slice(-(DECLINE_STREAK + 1))
+  return tail.length === DECLINE_STREAK + 1 && tail.every((g, i) => i === 0 || levelOf(g) < levelOf(tail[i - 1])) ? tail : null
+}
+
+/** המפתח שנשמר ב"הבנתי": הציון האחרון ברצף, ובנושא גם שם הנושא */
+const skipKey = (d: Decline) => (d.topic ? `${d.topic}:` : '') + d.grades[d.grades.length - 1].id
+
 /**
  * מקצועות שירדו שלוש פעמים ברצף: ארבעת הציונים האחרונים (מבחנים והערכות עצמיות, לפי הרמה) יורדים כל פעם.
- * לא מתריעים שוב על אותו רצף אחרי "הבנתי" (declineSkip שומר את הציון האחרון ברצף)
+ * גם נושא בתוך מקצוע (לפי הציונים שכתוב בהם הנושא), כשהמקצוע כולו לא מתריע על אותו ציון.
+ * לא מתריעים שוב על אותו רצף אחרי "הבנתי"
  */
 export function declines(data: ScheduleData, asOf: string): Decline[] {
   const bySubject = new Map<string, Grade[]>()
@@ -186,21 +197,28 @@ export function declines(data: ScheduleData, asOf: string): Decline[] {
   }
   const out: Decline[] = []
   for (const [subject, list] of bySubject) {
-    const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
-    const tail = sorted.slice(-(DECLINE_STREAK + 1))
-    if (tail.length < DECLINE_STREAK + 1) continue
-    if (!tail.every((g, i) => i === 0 || levelOf(g) < levelOf(tail[i - 1]))) continue
-    if ((data.declineSkip ?? []).includes(tail[tail.length - 1].id)) continue
-    out.push({ subject, grades: tail })
+    const tail = falling(list)
+    if (tail) out.push({ subject, grades: tail })
+    const byTopic = new Map<string, Grade[]>()
+    for (const g of list) if (g.topic?.trim()) byTopic.set(topicKey(g.topic), [...(byTopic.get(topicKey(g.topic)) ?? []), g])
+    for (const [topic, tl] of byTopic) {
+      const t = falling(tl)
+      if (!t || (tail && tail[tail.length - 1].id === t[t.length - 1].id)) continue
+      out.push({ subject, topic, grades: t })
+    }
   }
-  return out
+  const skip = new Set(data.declineSkip ?? [])
+  return out.filter((d) => !skip.has(skipKey(d)))
 }
 
 /** "הבנתי": לא להתריע שוב על הרצף הזה. ירידה נוספת תתריע מחדש */
 export const dismissDecline = (data: ScheduleData, d: Decline): ScheduleData => ({
   ...data,
-  declineSkip: [...(data.declineSkip ?? []), d.grades[d.grades.length - 1].id].slice(-30),
+  declineSkip: [...(data.declineSkip ?? []), skipKey(d)].slice(-30),
 })
+
+/** מה ירד: "פיזיקה" או "וקטורים בפיזיקה" */
+export const declineName = (d: Decline) => (d.topic ? `${d.topic} ב${d.subject}` : d.subject)
 
 /** תיאור קצר של הרצף: "80 ← 72 ← 65 ← 58" */
 export const declineText = (d: Decline) =>

@@ -1,4 +1,5 @@
 import type { DateRange, Lesson, ScheduleData, SemesterKey } from '../types'
+import { sameSubject } from './pdf/parseCell'
 
 /**
  * סמסטרים: במקום תוקף לכל שיעור לחוד, מגדירים את תאריכי הסמסטר פעם אחת,
@@ -118,4 +119,24 @@ export function semesterProblems(semesters: ScheduleData['semesters']): string[]
         out.push(`${SEMESTER_NAMES[list[i].k]} ו${SEMESTER_NAMES[list[j].k]} חופפים בתאריכים.`)
     }
   return out
+}
+
+/**
+ * מתי נגמר הקורס במקצוע: התאריך האחרון שבו יש לי שיעור בו (לפי תוקף השיעורים שאני לומד).
+ * undefined כשאחד השיעורים במקצוע קיים כל השנה, או כשאין לי שיעורים בו
+ */
+export function courseEnd(data: ScheduleData, subject: string): string | undefined {
+  const mine = new Set<string>([
+    ...data.entries.map((e) => e.lessonId),
+    ...data.choiceGroups.map((g) => g.chosenLessonId).filter((x): x is string => !!x),
+  ])
+  const lessons = data.lessons.filter((l) => mine.has(l.id) && sameSubject(l.name, subject))
+  if (!lessons.length) return undefined
+  let end: string | undefined
+  for (const l of lessons) {
+    const { to } = validRange(l, data.semesters)
+    if (!to) return undefined
+    if (!end || to > end) end = to
+  }
+  return end
 }

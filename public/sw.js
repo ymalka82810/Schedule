@@ -2,14 +2,11 @@
 // בהתקנה נשמרים כל קובצי הגרסה (הרשימה נכתבת כאן בזמן הבנייה, ראו vite.config.ts).
 // דפים: קודם מהרשת, ואם אין רשת או שהיא איטית מדי, מהזיכרון.
 // קבצים עם חותמת בשם (assets): מהזיכרון, בלי לבדוק ברשת. הם לא משתנים לעולם.
-// שאר הקבצים והגופנים: מהזיכרון, ומתעדכנים ברקע.
+// שאר הקבצים (אייקונים, manifest): מהזיכרון, ומתעדכנים ברקע.
 // בקשות לשרת (Convex) לא עוברות כאן בכלל.
 const BUILD = '__BUILD__'
 const PRECACHE = [/*__PRECACHE__*/]
 const CACHE = `schedule-${BUILD}`
-// הגופנים נשמרים בנפרד, כדי שעדכון של האתר לא יוריד אותם מחדש
-const FONTS = 'schedule-fonts'
-const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com']
 /** כמה לחכות לדף מהרשת לפני שמציגים את השמור (רשת חלשה) */
 const NAVIGATE_TIMEOUT = 3500
 // השרת מוסיף Vary, ואז בקשה של תגית script לא מוצאת קובץ שנשמר בהתקנה. הקבצים זהים לכל בקשה
@@ -28,7 +25,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== FONTS).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   )
 })
@@ -94,14 +91,10 @@ self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET') return
   const url = new URL(req.url)
-  const sameOrigin = url.origin === self.location.origin
-  const font = FONT_HOSTS.includes(url.hostname)
-  if (!sameOrigin && !font) return
   // רק בתוך האתר הזה (באותו דומיין של GitHub Pages יש גם אתרים אחרים)
-  if (sameOrigin && !url.pathname.startsWith(new URL(self.registration.scope).pathname)) return
+  if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL(self.registration.scope).pathname)) return
 
   if (req.mode === 'navigate') event.respondWith(navigate(req))
-  else if (font) event.respondWith(url.hostname === 'fonts.gstatic.com' ? cacheFirst(FONTS, req) : staleWhileRevalidate(FONTS, req))
   else if (url.pathname.includes('/assets/')) event.respondWith(cacheFirst(CACHE, req))
   else event.respondWith(staleWhileRevalidate(CACHE, req))
 })

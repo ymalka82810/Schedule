@@ -1,4 +1,4 @@
-import { Location, Zmanim } from '@hebcal/core'
+import { SUNRISE_ZENITH, sunTimeUtc } from './sun'
 import type { DayIndex, Minutes, Routine, TimeRef, Zman } from '../types'
 import { formatTime } from './time'
 
@@ -18,7 +18,7 @@ export const ZMAN_NAMES: Record<Zman, string> = {
   tzeit: 'צאת הכוכבים',
 }
 
-/** ערים לבחירה: שם בעברית ושם ב-hebcal */
+/** ערים לבחירה: שם בעברית, ומפתח באנגלית שנשמר בנתונים */
 export const CITIES: Array<{ he: string; key: string }> = [
   { he: 'ירושלים', key: 'Jerusalem' },
   { he: 'תל אביב', key: 'Tel Aviv' },
@@ -29,31 +29,58 @@ export const CITIES: Array<{ he: string; key: string }> = [
   { he: 'אילת', key: 'Eilat' },
 ]
 
+/** קו רוחב וקו אורך של כל עיר. כולן בשעון ישראל */
+const COORDS: Record<string, [number, number]> = {
+  Jerusalem: [31.76904, 35.21633],
+  'Tel Aviv': [32.08088, 34.78057],
+  Haifa: [32.81841, 34.9885],
+  'Beer Sheva': [31.25181, 34.7913],
+  'Petach Tikvah': [32.08707, 34.88747],
+  Ashdod: [31.79213, 34.64966],
+  Eilat: [29.55805, 34.94821],
+}
+
 const zmanCache = new Map<string, Record<Zman, Minutes>>()
+
+let israelClock: Intl.DateTimeFormat | undefined
+
+/** רגע (אלפיות שנייה) כדקות מחצות בשעון ישראל, כולל שעון קיץ */
+function israelMinutes(ms: number): Minutes {
+  israelClock ??= new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  const parts = israelClock.formatToParts(ms)
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value)
+  return part('hour') * 60 + part('minute')
+}
 
 /** זמני היום בתאריך (YYYY-MM-DD) בעיר, בדקות מחצות לפי השעון המקומי של העיר */
 export function zmanimOn(date: string, city = 'Jerusalem'): Record<Zman, Minutes> | null {
   const key = `${city}|${date}`
   const hit = zmanCache.get(key)
   if (hit) return hit
-  const loc = Location.lookup(city) ?? Location.lookup('Jerusalem')
-  if (!loc) return null
+  const [lat, lon] = COORDS[city] ?? COORDS.Jerusalem
   const [y, m, d] = date.split('-').map(Number)
-  const z = new Zmanim(loc, new Date(y, m - 1, d), false)
-  const tz = loc.getTzid()
-  const min = (t: Date) => {
-    const iso = Zmanim.formatISOWithTimeZone(tz, t)
-    return Number(iso.slice(11, 13)) * 60 + Number(iso.slice(14, 16))
+  const dayMs = Date.UTC(y, m - 1, d)
+  /** הרגע שבו השמש בזווית הזו מתחת לאופק (0 = זריחה או שקיעה), באלפיות שנייה */
+  const sun = (below: number, rising: boolean) => {
+    const utc = sunTimeUtc(dayMs / 86_400_000, lat, lon, below ? 90 + below : SUNRISE_ZENITH, rising)
+    return utc === null ? null : dayMs + utc * 60_000
   }
+  const sunrise = sun(0, true)
+  const sunset = sun(0, false)
+  const alot = sun(16.1, true)
+  const tzeit = sun(8.5, false)
+  if (sunrise === null || sunset === null || alot === null || tzeit === null) return null
+  /** שעה זמנית (לפי הגר״א): החלק ה-12 מהזריחה עד השקיעה */
+  const hours = (n: number) => sunrise + ((sunset - sunrise) / 12) * n
   const out: Record<Zman, Minutes> = {
-    alot: min(z.alotHaShachar()),
-    sunrise: min(z.sunrise()),
-    chatzot: min(z.chatzot()),
-    minchaGedola: min(z.minchaGedola()),
-    minchaKetana: min(z.minchaKetana()),
-    plag: min(z.plagHaMincha()),
-    sunset: min(z.sunset()),
-    tzeit: min(z.tzeit()),
+    alot: israelMinutes(alot),
+    sunrise: israelMinutes(sunrise),
+    chatzot: israelMinutes(hours(6)),
+    minchaGedola: israelMinutes(hours(6.5)),
+    minchaKetana: israelMinutes(hours(9.5)),
+    plag: israelMinutes(hours(10.75)),
+    sunset: israelMinutes(sunset),
+    tzeit: israelMinutes(tzeit),
   }
   zmanCache.set(key, out)
   return out

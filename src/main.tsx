@@ -1,10 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import './fonts/fonts.css'
 import './index.css'
 import App from './App.tsx'
 import { AuthRoot } from './auth/AuthRoot.tsx'
 import { CrashScreen, ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { emptyData } from './data/empty.ts'
+import { registerServiceWorker } from './lib/appUpdate.ts'
 import { initialData } from './data/initial.ts'
 
 // בלי כתובת Convex (עוד לא חוברה, או פיתוח מקומי) האתר רץ כסביבת בדיקה בזיכרון, בלי התחברות
@@ -26,8 +28,4 @@ createRoot(document.getElementById('root')!).render(
 )
 
 // התקנה כאפליקציה ועבודה בלי אינטרנט. רק באתר החי, כדי לא להפריע בפיתוח
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err) => console.warn('service worker', err))
-  })
-}
+if (import.meta.env.PROD) registerServiceWorker(`${import.meta.env.BASE_URL}sw.js`)

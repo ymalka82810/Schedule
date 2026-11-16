@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { DayIndex, Minutes, ScheduleData, Slot } from './types'
 import type { Account } from './auth/account'
 import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
@@ -34,6 +34,7 @@ import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from './lib/stor
 import { Menu } from './components/Menu'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { lazyDialog } from './components/lazyDialog'
+import { onUpdateAvailable, updateAvailable } from './lib/appUpdate'
 import { savedAtDate } from './auth/offlineCache'
 import { DAY_NAMES, addDays, dateOfDay, formatTime, formatWeekRange, isSameDay, isoDate, startOfWeek } from './lib/time'
 
@@ -83,9 +84,14 @@ interface Props {
   onPersist?: (data: ScheduleData, backup: ScheduleData | null) => void
   /** הודעה להציג בפתיחה, למשל שהשינויים מהמכשיר נשלחו לשרת */
   initialToast?: string
+  /**
+   * עולה כשהנתונים הוחלפו מבחוץ (נשמרו ממכשיר אחר): הלוח עובר ל-initialData החדש
+   * בלי לטעון את הדף מחדש, והשבוע המוצג נשאר
+   */
+  syncStamp?: number
 }
 
-export default function App({ initialData, initialBackup, account, onPersist, initialToast }: Props) {
+export default function App({ initialData, initialBackup, account, onPersist, initialToast, syncStamp }: Props) {
   const [data, setData] = useState(initialData)
   const [backup, setBackup] = useState(initialBackup)
   const [importing, setImporting] = useState(false)
@@ -93,7 +99,20 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const [dialog, setDialog] = useState<Dialog | null>(null)
   /** היסטוריה לביטול פעולה, רק בזיכרון של הדף */
   const [history, setHistory] = useState<Array<{ data: ScheduleData; backup: ScheduleData | null; label: string }>>([])
-  const [toast, setToast] = useState<string | null>(initialToast ?? null)
+  const [toast, setToast] = useState<string | null>(null)
+  /** הודעה שאין מה לבטל בה (למשל: המערכת התעדכנה ממכשיר אחר) */
+  const [notice, setNotice] = useState<string | null>(initialToast ?? null)
+  // הנתונים הוחלפו מבחוץ: מאמצים אותם בזמן הציור, לפי התבנית של React לעדכון state מתוך props
+  const [seenStamp, setSeenStamp] = useState(syncStamp)
+  if (syncStamp !== seenStamp) {
+    setSeenStamp(syncStamp)
+    setData(initialData)
+    setBackup(initialBackup)
+    // אי אפשר לבטל פעולה אל מצב שהמכשיר האחר כבר החליף
+    setHistory([])
+    setToast(null)
+    setNotice(initialToast ?? null)
+  }
   /** בלי חיבור: האם נעשו כאן שינויים שממתינים לשרת */
   const [offlineEdits, setOfflineEdits] = useState(account.kind === 'offline' && !!account.pending)
   const [theme, setTheme] = useState<Theme>(loadTheme)
@@ -107,6 +126,9 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const [addAt, setAddAt] = useState<{ day: DayIndex; start: Minutes; x: number; y: number } | null>(null)
   /** מסך מגע בלי עכבר: הטיפים מדברים על לחיצה ארוכה במקום על גרירה ומקלדת */
   const [isTouch] = useState(() => window.matchMedia('(hover: none)').matches)
+  /** גרסה חדשה של האתר הותקנה ברקע */
+  const newVersion = useSyncExternalStore(onUpdateAvailable, updateAvailable)
+  const [versionDismissed, setVersionDismissed] = useState(false)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -201,6 +223,7 @@ export default function App({ initialData, initialBackup, account, onPersist, in
     // הפעם הראשונה שהלוח מתמלא: מהיום הזה סופרים פספוסים ותזכורות, לא מלפני כן
     if (!next.startedAt && !data.lessons.length && next.lessons.length) next = { ...next, startedAt: todayIso }
     setHistory((h) => [...h.slice(-19), { data, backup, label }])
+    setNotice(null)
     setToast(label)
     setData(next)
     setBackup(nextBackup)
@@ -224,6 +247,11 @@ export default function App({ initialData, initialBackup, account, onPersist, in
     const t = window.setTimeout(() => setToast(null), 7000)
     return () => window.clearTimeout(t)
   }, [toast, history.length])
+  useEffect(() => {
+    if (!notice) return
+    const t = window.setTimeout(() => setNotice(null), 10_000)
+    return () => window.clearTimeout(t)
+  }, [notice])
 
   // Ctrl+Z מחוץ לשדות טקסט
   useEffect(() => {
@@ -481,6 +509,25 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         <p className="mode-note is-owner is-offline" role="status">
           יש שינויים שעוד לא הגיעו לשרת. הם שמורים במכשיר ויישלחו כשהחיבור יתייצב.
         </p>
+      )}
+
+      {newVersion && !versionDismissed && (
+        <section className="mode-note version-note" aria-label="גרסה חדשה של האתר">
+          <p>
+            עלתה גרסה חדשה של האתר.{' '}
+            {account.kind === 'guest' || account.kind === 'local'
+              ? 'רענון יטען אותה, אבל הלוח של סביבת הבדיקה יימחק.'
+              : 'רענון יטען אותה. מה שערכת כבר שמור.'}
+          </p>
+          <div className="import-actions">
+            <button type="button" className="btn" onClick={() => location.reload()}>
+              רענון
+            </button>
+            <button type="button" className="link-btn" onClick={() => setVersionDismissed(true)}>
+              אחר כך
+            </button>
+          </div>
+        </section>
       )}
 
       {selfDue && (
@@ -777,6 +824,15 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           <span>{toast}</span>
           <button type="button" className="link-btn" onClick={undo}>
             ביטול הפעולה
+          </button>
+        </div>
+      )}
+
+      {notice && !(toast && history.length > 0) && (
+        <div className="toast" role="status">
+          <span>{notice}</span>
+          <button type="button" className="link-btn" onClick={() => setNotice(null)}>
+            סגירה
           </button>
         </div>
       )}

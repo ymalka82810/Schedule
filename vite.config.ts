@@ -53,7 +53,6 @@ export default defineConfig({
         advancedChunks: {
           groups: [
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
-            { name: 'hebcal', test: /node_modules[\\/]@hebcal[\\/]/ },
             { name: 'convex', test: /node_modules[\\/](convex|@convex-dev|@auth|oauth4webapi|jose|cookie|lucia|@oslojs|arctic|is-network-error)[\\/]/ },
           ],
         },

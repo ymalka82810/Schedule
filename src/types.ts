@@ -287,7 +287,7 @@ export interface PlanSettings {
   travelMinutes?: Minutes
   /** כמה שעות ביום לכל היותר, שיעורים ותרגול יחד. חסר = 10 */
   maxLoadPerDay?: number
-  /** עיר לחישוב זמני היום (לתפילות). שם באנגלית כמו ב-hebcal, חסר = Jerusalem */
+  /** עיר לחישוב זמני היום (לתפילות). שם באנגלית (ראו CITIES ב-routines.ts), חסר = Jerusalem */
   location?: string
   /** מקצועות שלא צריך להם תרגול אוטומטי */
   autoOff?: string[]

@@ -22,7 +22,7 @@
 
 ```bash
 npm install
-npm run dev
+npm run dev   # בלי שרת זו סביבת בדיקה ריקה; עם ‎?demo בכתובת נפתחת המערכת לדוגמה
 npm test   # בדיקות הפענוח והאשף
 ```
 
@@ -31,7 +31,8 @@ npm test   # בדיקות הפענוח והאשף
 - `src/types.ts` – מבנה הנתונים (Slot, Lesson, FixedEntry, ChoiceGroup, Goal, OneOffEvent)
 - `src/data/initial.ts` – המערכת ההתחלתית
 - `src/lib/` – זמן ותאריכים, העדפת ערכת הצבעים ב-localStorage, חישוב הבלוקים לציור
-- `src/components/WeekGrid.tsx` – הלוח השבועי
+- `src/components/WeekGrid.tsx` – הלוח השבועי: גרירה, לחיצה על מקום ריק להוספה, והחלקה בין ימים בטלפון
+- `src/components/Menu.tsx` – תפריט נפתח ("＋ הוספה", "עוד")
 - `src/components/LessonDialog.tsx` ו-`src/lib/edit.ts` – עריכה מהלוח וגיבוי
 - `src/lib/plan.ts` – תכנון הזמן הפנוי: זמן פנוי, ניקוד לכל מקום אפשרי ושיבוץ היעדים
 - `src/lib/diff.ts` – השוואה בין המערכת השמורה לגרסה חדשה מהקובץ

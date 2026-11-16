@@ -4,16 +4,20 @@ import './index.css'
 import App from './App.tsx'
 import { AuthRoot } from './auth/AuthRoot.tsx'
 import { emptyData } from './data/empty.ts'
+import { initialData } from './data/initial.ts'
 
 // בלי כתובת Convex (עוד לא חוברה, או פיתוח מקומי) האתר רץ כסביבת בדיקה בזיכרון, בלי התחברות
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
+
+// בפיתוח מקומי: ‎?demo פותח את המערכת לדוגמה במקום לוח ריק, כדי לראות את הלוח מלא
+const demo = new URLSearchParams(location.search).has('demo')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {convexUrl ? (
       <AuthRoot url={convexUrl} />
     ) : (
-      <App initialData={emptyData} initialBackup={null} account={{ kind: 'local' }} />
+      <App initialData={demo ? initialData : emptyData} initialBackup={null} account={{ kind: 'local' }} />
     )}
   </StrictMode>,
 )

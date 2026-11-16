@@ -24,7 +24,7 @@ import { dismissMissed, skipPlanned, unpinPlanned } from '../lib/prefs'
 interface EventProps {
   data: ScheduleData
   /** קיים לעריכה, או תאריך התחלתי לחדש */
-  event: OneOffEvent | { date: string; title?: string }
+  event: OneOffEvent | { date: string; title?: string; start?: number }
   onSave: (data: ScheduleData) => void
   onClose: () => void
 }
@@ -44,8 +44,12 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
   const [subject, setSubject] = useState(existing?.examSubject ?? subjects[0] ?? '')
   const [date, setDate] = useState(event.date)
   const [to, setTo] = useState(event.date)
-  const [start, setStart] = useState(existing?.start ?? (kind === 'exam' ? 9 * 60 : 19 * 60))
-  const [end, setEnd] = useState(existing?.end ?? (kind === 'exam' ? 12 * 60 : 22 * 60))
+  // אירוע חדש שנפתח מלחיצה על הלוח מתחיל בשעה שלחצו עליה
+  const hint = !existing && 'start' in event ? event.start : undefined
+  const [start, setStart] = useState(existing?.start ?? hint ?? (kind === 'exam' ? 9 * 60 : 19 * 60))
+  const [end, setEnd] = useState(
+    existing?.end ?? (hint !== undefined ? Math.min(hint + 120, 24 * 60) : kind === 'exam' ? 12 * 60 : 22 * 60),
+  )
   const [error, setError] = useState<string | null>(null)
 
   const submit = (e: FormEvent) => {

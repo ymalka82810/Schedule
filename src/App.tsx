@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DayIndex, Minutes, ScheduleData, Slot } from './types'
 import type { Account } from './auth/account'
 import { ImportDialog } from './components/ImportDialog'
@@ -34,13 +34,14 @@ import { learnedPrefs, movePlanned } from './lib/prefs'
 import { moveOf } from './lib/plan'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
-import { loadTheme, saveTheme, type Theme } from './lib/storage'
+import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from './lib/storage'
+import { Menu } from './components/Menu'
 import { savedAtDate } from './auth/offlineCache'
-import { addDays, dateOfDay, formatWeekRange, isSameDay, isoDate, startOfWeek } from './lib/time'
+import { DAY_NAMES, addDays, dateOfDay, formatTime, formatWeekRange, isSameDay, isoDate, startOfWeek } from './lib/time'
 
 type Dialog =
   | { kind: 'lesson'; mode: LessonDialogMode; date?: string }
-  | { kind: 'event'; event: OneOffEvent | { date: string; title?: string } }
+  | { kind: 'event'; event: OneOffEvent | { date: string; title?: string; start?: Minutes } }
   | { kind: 'session'; session: PlannedSession; goal: Goal }
   | { kind: 'goals' }
   | { kind: 'calendar' }
@@ -84,10 +85,16 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   // במוצאי שבת (או כשהשבוע כבר נגמר לתכנון) נפתחים על השבוע הבא
   const [weekStart, setWeekStart] = useState(() => activeWeek(data, new Date()).weekStart)
   const [selectedDay, setSelectedDay] = useState<DayIndex>(() => activeWeek(data, new Date()).day)
+  /** הטיפ על גרירה: מוצג עד שסוגרים אותו, ואפשר לפתוח שוב מהתפריט */
+  const [showHint, setShowHint] = useState(() => !loadFlag('hint-drag-seen'))
+  /** לחיצה על מקום ריק בלוח: מה להוסיף שם */
+  const [addAt, setAddAt] = useState<{ day: DayIndex; start: Minutes; x: number; y: number } | null>(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     saveTheme(theme)
+    // צבע שורת הדפדפן בטלפון תואם לרקע של הערכה
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#121829' : '#eef1f6')
   }, [theme])
 
   // מעדכן את קו ה"עכשיו" פעם בדקה
@@ -190,7 +197,19 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         if (dialog || importing) return
         e.preventDefault()
         undo()
+        return
       }
+      // קיצורים בלוח: חצים = שבוע קודם או הבא, T = השבוע, N = שיעור חדש. לא בתוך שדה, דיאלוג או בלוק מסומן
+      if (dialog || importing || loggingIn || addAt || e.defaultPrevented) return
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (/INPUT|TEXTAREA|SELECT|BUTTON/.test(el.tagName) || el.closest('.block, .menu')) return
+      if (e.key === 'ArrowLeft') setWeekStart((w) => addDays(w, 7))
+      else if (e.key === 'ArrowRight') setWeekStart((w) => addDays(w, -7))
+      else if (e.code === 'KeyT') goToThisWeek()
+      else if (e.code === 'KeyN') setDialog({ kind: 'lesson', mode: { kind: 'new', day: newDay } })
+      else return
+      // בלי זה האות N הייתה נכתבת בשדה השם של הדיאלוג שנפתח
+      e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -290,89 +309,104 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       <header className="top">
         <div className="top-title">
           <h1>המערכת שלי</h1>
-          <p className="top-range">{formatWeekRange(weekStart)}</p>
-          {data.source?.versionDate && (
-            <p className="muted">לפי המערכת המעודכנת ל-{data.source.versionDate}</p>
+          {account.kind === 'owner' && !account.unsynced && (
+            <span className="status-pill is-ok" title={`מחובר כ-${account.email}. כל שינוי נשמר בשרת`}>
+              נשמר בשרת
+            </span>
+          )}
+          {(account.kind === 'offline' || (account.kind === 'owner' && account.unsynced)) && (
+            <span className="status-pill is-warn">ממתין לחיבור</span>
+          )}
+          {(account.kind === 'guest' || account.kind === 'local') && (
+            <span className="status-pill" title="הכול נשמר רק בזיכרון של הדף ויימחק ברענון. אין חיבור לשום חשבון">
+              סביבת בדיקה · נמחק ברענון
+            </span>
           )}
         </div>
 
-        <div className="top-actions">
+        <div className="top-bar">
           <div className="week-nav">
             <button
               type="button"
               className="btn btn-icon"
               aria-label="השבוע הקודם"
+              title="השבוע הקודם (חץ ימינה)"
               onClick={() => setWeekStart((w) => addDays(w, -7))}
             >
               ›
             </button>
-            <button type="button" className="btn" onClick={goToThisWeek} disabled={isThisWeek}>
-              השבוע
-            </button>
+            <div className="week-label" aria-live="polite">
+              <span className="top-range">{formatWeekRange(weekStart)}</span>
+              {data.source?.versionDate && <span className="week-version">מעודכן ל-{data.source.versionDate}</span>}
+            </div>
             <button
               type="button"
               className="btn btn-icon"
               aria-label="השבוע הבא"
+              title="השבוע הבא (חץ שמאלה)"
               onClick={() => setWeekStart((w) => addDays(w, 7))}
             >
               ‹
             </button>
+            {!isThisWeek && (
+              <button type="button" className="btn btn-today" onClick={goToThisWeek} title="חזרה לשבוע הנוכחי (T)">
+                חזרה להיום
+              </button>
+            )}
           </div>
 
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setDialog({ kind: 'lesson', mode: { kind: 'new', day: newDay } })}
-          >
-            ＋ שיעור או פעילות
-          </button>
-
-          <button type="button" className="btn" onClick={() => setDialog({ kind: 'event', event: { date: newEventDate() } })}>
-            ＋ אירוע, מבחן או חופשה
-          </button>
-
-          <button type="button" className="btn" onClick={() => setDialog({ kind: 'goals' })}>
-            יעדים
-          </button>
-
-          <button type="button" className="btn" onClick={() => setDialog({ kind: 'grades' })}>
-            ציונים
-          </button>
-
-          <button type="button" className="btn" onClick={() => setDialog({ kind: 'calendar' })}>
-            לוח שנה
-          </button>
-
-          <button type="button" className="btn" onClick={() => setImporting(true)}>
-            ייבוא וגיבוי
-          </button>
-
-          <button type="button" className="btn" onClick={() => window.print()}>
-            הדפסה
-          </button>
-
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-          >
-            {theme === 'dark' ? 'מצב בהיר' : 'מצב כהה'}
-          </button>
-
-          {account.kind === 'guest' && (
-            <button type="button" className="btn" onClick={() => setLoggingIn(true)}>
-              כניסה (בעלים)
+          <div className="top-actions">
+            <Menu
+              primary
+              label="＋ הוספה"
+              items={[
+                {
+                  label: 'שיעור או פעילות',
+                  hint: 'חוזר כל שבוע',
+                  onSelect: () => setDialog({ kind: 'lesson', mode: { kind: 'new', day: newDay } }),
+                },
+                {
+                  label: 'אירוע, מבחן או חופשה',
+                  hint: 'בתאריך מסוים',
+                  onSelect: () => setDialog({ kind: 'event', event: { date: newEventDate() } }),
+                },
+              ]}
+            />
+            <button type="button" className="btn" onClick={() => setDialog({ kind: 'goals' })}>
+              יעדים
             </button>
-          )}
-          {account.kind === 'owner' && (
-            <button type="button" className="btn" onClick={account.signOut}>
-              התנתקות
+            <button type="button" className="btn" onClick={() => setDialog({ kind: 'grades' })}>
+              ציונים
             </button>
-          )}
+            <Menu
+              label="עוד ▾"
+              align="end"
+              header={account.kind === 'owner' || account.kind === 'offline' ? <bdi dir="ltr">{account.email}</bdi> : undefined}
+              items={[
+                { label: 'לוח שנה', hint: 'סמסטרים וחופשות', onSelect: () => setDialog({ kind: 'calendar' }) },
+                { label: 'ייבוא וגיבוי', hint: 'קובץ מערכת, גיבוי ושחזור', onSelect: () => setImporting(true) },
+                { label: 'הדפסה', hint: 'כל השבוע על דף אחד', onSelect: () => window.print() },
+                {
+                  label: theme === 'dark' ? 'מצב בהיר' : 'מצב כהה',
+                  onSelect: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
+                },
+                {
+                  label: 'איך מזיזים ומוסיפים?',
+                  hint: 'גרירה, לחיצה וקיצורי מקלדת',
+                  onSelect: () => {
+                    saveFlag('hint-drag-seen', false)
+                    setShowHint(true)
+                  },
+                },
+                ...(account.kind === 'guest' ? [{ label: 'כניסה (בעלים)', onSelect: () => setLoggingIn(true) }] : []),
+                ...(account.kind === 'owner' ? [{ label: 'התנתקות', onSelect: account.signOut, danger: true }] : []),
+              ]}
+            />
+          </div>
         </div>
       </header>
 
-      {account.kind === 'offline' ? (
+      {account.kind === 'offline' && (
         <p className="mode-note is-offline" role="status">
           {offlineEdits
             ? 'אין חיבור לשרת. השינויים נשמרים במכשיר הזה, ויישלחו לשרת כשהחיבור יחזור.'
@@ -381,16 +415,10 @@ export default function App({ initialData, initialBackup, account, onPersist, in
                 timeStyle: 'short',
               })}. אפשר לערוך, והשינויים יישלחו לשרת כשהחיבור יחזור.`}
         </p>
-      ) : account.kind === 'owner' ? (
-        <p className={`mode-note is-owner${account.unsynced ? ' is-offline' : ''}`} role="status">
-          מחובר כ-<bdi dir="ltr">{account.email}</bdi>.{' '}
-          {account.unsynced
-            ? 'יש שינויים שעוד לא הגיעו לשרת. הם שמורים במכשיר ויישלחו כשהחיבור יתייצב.'
-            : 'המערכת נשמרת בשרת.'}
-        </p>
-      ) : (
-        <p className="mode-note">
-          סביבת בדיקה: הכול נשמר רק בזיכרון של הדף ויימחק ברענון. אין חיבור לשום חשבון.
+      )}
+      {account.kind === 'owner' && account.unsynced && (
+        <p className="mode-note is-owner is-offline" role="status">
+          יש שינויים שעוד לא הגיעו לשרת. הם שמורים במכשיר ויישלחו כשהחיבור יתייצב.
         </p>
       )}
 
@@ -500,11 +528,28 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         </section>
       )}
 
-      {!isEmpty && (
-        <p className="muted drag-hint">
-          אפשר לגרור שיעור, אירוע או מפגש מתוכנן לשעה אחרת, ולשנות אורך מהקצה התחתון. בטלפון: לחיצה ארוכה ואז גרירה.
-          במקלדת: חצים על בלוק מסומן, ו-Enter לאישור.
-        </p>
+      {showHint && (
+        <aside className="drag-hint" aria-label="טיפים לשימוש בלוח">
+          <ul>
+            <li>לחיצה על מקום ריק בלוח מוסיפה שם שיעור או אירוע.</li>
+            <li>גרירה מזיזה שיעור, אירוע או מפגש מתוכנן, והקצה התחתון משנה אורך. בטלפון: לחיצה ארוכה ואז גרירה.</li>
+            <li className="hint-touch">בטלפון: החלקה ימינה או שמאלה על הלוח עוברת בין הימים.</li>
+            <li className="hint-keys">
+              במקלדת: חצים ימינה ושמאלה עוברים בין שבועות, T חוזר להיום, N מוסיף שיעור. על בלוק מסומן החצים מזיזים אותו,
+              ו-Enter מאשר.
+            </li>
+          </ul>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              saveFlag('hint-drag-seen', true)
+              setShowHint(false)
+            }}
+          >
+            הבנתי
+          </button>
+        </aside>
       )}
 
       {terms.length > 0 && (
@@ -532,7 +577,28 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         onBlockClick={openBlock}
         dayNotes={dayNotes}
         onBlockMove={handleBlockMove}
+        onEmptyClick={(day, start, x, y) => setAddAt({ day, start, x, y })}
+        onShiftWeek={(dir) => {
+          setWeekStart((w) => addDays(w, dir * 7))
+          setSelectedDay(dir > 0 ? 0 : 6)
+        }}
       />
+
+      {addAt && (
+        <AddHere
+          at={addAt}
+          label={`יום ${DAY_NAMES[addAt.day]}, ${formatTime(addAt.start)}`}
+          onClose={() => setAddAt(null)}
+          onLesson={() => {
+            setDialog({ kind: 'lesson', mode: { kind: 'new', day: addAt.day, start: addAt.start } })
+            setAddAt(null)
+          }}
+          onEvent={() => {
+            setDialog({ kind: 'event', event: { date: dateOfDay(weekStart, addAt.day), start: addAt.start } })
+            setAddAt(null)
+          }}
+        />
+      )}
 
       {dialog?.kind === 'lesson' && (
         <LessonDialog
@@ -627,6 +693,57 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           onClose={() => setImporting(false)}
         />
       )}
+    </div>
+  )
+}
+
+/** תפריט קטן שנפתח במקום שלחצו עליו בלוח: מה להוסיף בשעה הזו */
+function AddHere({
+  at,
+  label,
+  onLesson,
+  onEvent,
+  onClose,
+}: {
+  at: { x: number; y: number }
+  label: string
+  onLesson: () => void
+  onEvent: () => void
+  onClose: () => void
+}) {
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    box.current?.querySelector('button')?.focus()
+    const onDown = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) onClose()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    // גלילה מזיזה את הלוח מתחת לתפריט, אז סוגרים
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onClose, { passive: true })
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onClose)
+    }
+  }, [onClose])
+  // נשאר בתוך המסך גם ליד הקצוות
+  const left = Math.max(8, Math.min(at.x - 110, window.innerWidth - 228))
+  const top = Math.min(at.y + 6, window.innerHeight - 170)
+  return (
+    <div ref={box} className="menu-list add-here" role="menu" aria-label={`הוספה ב${label}`} style={{ left, top }}>
+      <div className="menu-header">{label}</div>
+      <button type="button" role="menuitem" className="menu-item" onClick={onLesson}>
+        <span>＋ שיעור או פעילות</span>
+        <span className="menu-hint">חוזר כל שבוע</span>
+      </button>
+      <button type="button" role="menuitem" className="menu-item" onClick={onEvent}>
+        <span>＋ אירוע או מבחן</span>
+        <span className="menu-hint">רק בתאריך הזה</span>
+      </button>
     </div>
   )
 }

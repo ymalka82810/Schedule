@@ -1,4 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type TouchEvent as ReactTouchEvent,
+} from 'react'
 import type { DayIndex, Minutes } from '../types'
 import { conflictsOf, type Block } from '../lib/layout'
 import { DAYS, DAY_NAMES, addDays, formatTime, isSameDay, isoDate, minutesOfDay } from '../lib/time'
@@ -17,6 +27,10 @@ interface Props {
   dayNotes?: Partial<Record<DayIndex, string>>
   /** שחרור של בלוק שנגרר או שאורכו שונה. בלי זה אין גרירה */
   onBlockMove?: (blockId: string, day: DayIndex, start: Minutes, end: Minutes) => void
+  /** לחיצה על מקום ריק בלוח: היום, השעה (מעוגלת לחצי שעה) ומיקום הלחיצה במסך */
+  onEmptyClick?: (day: DayIndex, start: Minutes, x: number, y: number) => void
+  /** בטלפון: החלקה מעבר ליום האחרון או הראשון עוברת שבוע */
+  onShiftWeek?: (dir: 1 | -1) => void
 }
 
 /** קפיצות של רבע שעה בגרירה */
@@ -49,7 +63,23 @@ interface Drag {
 
 const snap = (m: Minutes) => Math.round(m / SNAP) * SNAP
 
-export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectDay, onBlockClick, dayNotes, onBlockMove }: Props) {
+/** החלקה אופקית בטלפון: כמה פיקסלים לפחות, וכמה מותר לסטות למעלה או למטה */
+const SWIPE_MIN = 60
+const SWIPE_DRIFT = 45
+
+export function WeekGrid({
+  weekStart,
+  blocks,
+  range,
+  now,
+  selectedDay,
+  onSelectDay,
+  onBlockClick,
+  dayNotes,
+  onBlockMove,
+  onEmptyClick,
+  onShiftWeek,
+}: Props) {
   const [ghost, setGhost] = useState<Drag | null>(null)
   const drag = useRef<Drag | null>(null)
   const pressTimer = useRef<number | undefined>(undefined)
@@ -262,6 +292,27 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
     return true
   }
 
+  /** תחילת מגע על הלוח, לזיהוי החלקה בין ימים */
+  const swipe = useRef<{ x: number; y: number; t: number } | null>(null)
+  const onTouchStart = (e: ReactTouchEvent) => {
+    const t = e.touches[0]
+    swipe.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null
+  }
+  const onTouchEnd = (e: ReactTouchEvent) => {
+    const from = swipe.current
+    swipe.current = null
+    // רק בתצוגת יום אחד, ולא באמצע גרירה של בלוק
+    if (!from || drag.current?.active || !window.matchMedia('(max-width: 47.5rem)').matches) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - from.x
+    if (Math.abs(dx) < SWIPE_MIN || Math.abs(t.clientY - from.y) > SWIPE_DRIFT || Date.now() - from.t > 700) return
+    // הלוח מימין לשמאל: החלקה ימינה מביאה את היום הבא
+    const next = selectedDay + (dx > 0 ? 1 : -1)
+    if (next > 6) onShiftWeek?.(1)
+    else if (next < 0) onShiftWeek?.(-1)
+    else onSelectDay(next as DayIndex)
+  }
+
   const hours: number[] = []
   for (let m = range.start; m < range.end; m += 60) hours.push(m)
 
@@ -306,7 +357,12 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
         })}
       </div>
 
-      <div className="week-body" style={{ '--hours': hours.length } as CSSProperties}>
+      <div
+        className="week-body"
+        style={{ '--hours': hours.length } as CSSProperties}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         <div className="ruler" aria-hidden="true">
           {hours.map((m) => (
             <span key={m} className="ruler-hour">
@@ -325,10 +381,22 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
           return (
             <div
               key={day}
-              className={`day-col${isToday ? ' is-today' : ''}${day === selectedDay ? ' is-selected' : ''}`}
+              className={`day-col${isToday ? ' is-today' : ''}${day === selectedDay ? ' is-selected' : ''}${onEmptyClick ? ' is-addable' : ''}`}
               role="tabpanel"
               data-day={day}
               aria-label={`יום ${DAY_NAMES[day]}`}
+              onClick={
+                onEmptyClick
+                  ? (e: ReactMouseEvent<HTMLDivElement>) => {
+                      // רק לחיצה על הרקע עצמו, לא על בלוק ולא בסוף גרירה
+                      if (e.target !== e.currentTarget || suppressClick.current) return
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const at = range.start + ((e.clientY - rect.top) / rect.height) * (range.end - range.start)
+                      const start = Math.max(0, Math.min(23 * 60, Math.floor(at / 30) * 30))
+                      onEmptyClick(day, start, e.clientX, e.clientY)
+                    }
+                  : undefined
+              }
             >
               {dayBlocks.length === 0 && <p className="day-empty">יום פנוי</p>}
 
@@ -375,6 +443,7 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                     key={b.id}
                     className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${b.isActivity ? ' is-activity' : ''}${duration < 60 ? ' is-short' : ''}${duration <= 30 ? ' is-tiny' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
                     style={style}
+                    title={[b.name, `${formatTime(b.start)}–${formatTime(b.end)}`, b.kind, b.room, b.teacher].filter(Boolean).join(' · ')}
                     {...click}
                     {...dragProps}
                   >
@@ -392,7 +461,8 @@ export function WeekGrid({ weekStart, blocks, range, now, selectedDay, onSelectD
                     <h3 className="block-name">{b.name}</h3>
                     <p className="block-time">
                       <bdi dir="ltr">
-                        {formatTime(b.start)}–{formatTime(b.end)}
+                        {formatTime(b.start)}
+                        <span className="time-end">–{formatTime(b.end)}</span>
                       </bdi>
                       {b.kind && <span className="block-kind">{b.kind}</span>}
                     </p>

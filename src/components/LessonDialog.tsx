@@ -35,7 +35,7 @@ import type { SemesterKey } from '../types'
 type Validity = 'all' | SemesterKey | 'dates'
 
 export type LessonTarget = Extract<BlockTarget, { kind: 'entry' | 'choice' | 'practice' }>
-export type LessonDialogMode = { kind: 'edit'; target: LessonTarget } | { kind: 'new'; day: DayIndex }
+export type LessonDialogMode = { kind: 'edit'; target: LessonTarget } | { kind: 'new'; day: DayIndex; start?: number }
 
 interface Props {
   data: ScheduleData
@@ -60,7 +60,11 @@ export function LessonDialog({ data, mode, date, onSave, onClose, onOpenGoals }:
         ? target.group.slot
         : target?.kind === 'practice'
           ? target.window.slot
-          : { day: mode.kind === 'new' ? mode.day : 0, start: 9 * 60, end: 10 * 60 }
+          : (() => {
+              // שיעור חדש: לפי המקום שלחצו עליו בלוח, ואם אין אז 9:00
+              const start = mode.kind === 'new' && mode.start !== undefined ? Math.min(mode.start, 23 * 60) : 9 * 60
+              return { day: mode.kind === 'new' ? mode.day : 0, start, end: start + 60 }
+            })()
 
   const lesson = target?.kind === 'entry' ? target.lesson : null
   const [name, setName] = useState(

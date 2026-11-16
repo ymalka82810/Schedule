@@ -19,3 +19,21 @@ export function saveTheme(theme: Theme): void {
     // לא קריטי
   }
 }
+
+/** דגל קטן שנשמר במכשיר, למשל "כבר ראיתי את הטיפ" */
+export function loadFlag(name: string): boolean {
+  try {
+    return localStorage.getItem(`schedule:${name}`) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function saveFlag(name: string, on: boolean): void {
+  try {
+    if (on) localStorage.setItem(`schedule:${name}`, '1')
+    else localStorage.removeItem(`schedule:${name}`)
+  } catch {
+    // לא קריטי
+  }
+}

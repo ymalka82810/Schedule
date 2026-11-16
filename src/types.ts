@@ -183,6 +183,16 @@ export interface SessionPin {
 }
 
 /** "לא מתאים לי כאן": המפגש לא ישובץ בסביבת השעה הזו בתאריך הזה, והתכנון מוצא לו מקום אחר */
+/** נסיעה שהזזתי בגרירה ביום מסוים: נשארת במקום החדש רק ביום הזה, והזמן הפנוי מתחשב בה */
+export interface TravelMove {
+  /** YYYY-MM-DD */
+  date: string
+  /** לפני השיעור הראשון או אחרי האחרון */
+  side: 'before' | 'after'
+  start: Minutes
+  end: Minutes
+}
+
 export interface SessionSkip {
   id: string
   goalId: string
@@ -356,6 +366,8 @@ export interface ScheduleData {
   moves?: Move[]
   /** מפגשים מתוכננים שהוזזו בגרירה */
   planPins?: SessionPin[]
+  /** נסיעות שהוזזו בגרירה, ליום מסוים */
+  travelMoves?: TravelMove[]
   /** מפגשים מתוכננים שסומנו "לא מתאים לי כאן" */
   planSkips?: SessionSkip[]
   /** מפגשים שהזמן שלהם עבר ולא יצא לתרגל: יורדים מהלוח, והתכנון משלים אותם בהמשך השבוע */

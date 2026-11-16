@@ -53,6 +53,8 @@ interface Drag {
   day: DayIndex
   start: Minutes
   touch: boolean
+  /** נשאר באותו יום (נסיעה) */
+  dayLocked?: boolean
   /** הזזה עם המקלדת: חצים, Enter לאישור */
   keyboard?: boolean
   x: number
@@ -126,7 +128,7 @@ export function WeekGrid({
         if (dayAttr === undefined) continue
         const day = Number(dayAttr) as DayIndex
         if (h.classList.contains('day-head')) {
-          if (d.mode === 'resize') return
+          if (d.mode === 'resize' || d.dayLocked) return
           // בטלפון מוצג יום אחד: מעבר מעל לשונית של יום אחר עובר אליו
           if (day !== d.day) selectRef.current(day)
           d.day = day
@@ -138,7 +140,7 @@ export function WeekGrid({
           // שינוי אורך נשאר באותו יום, גם אם האצבע זזה הצידה
           d.len = snap(pointer) - d.start
         } else {
-          d.day = day
+          if (!d.dayLocked) d.day = day
           d.start = snap(pointer - d.grab)
         }
         clamp(d)
@@ -225,6 +227,7 @@ export function WeekGrid({
     day: b.day,
     start: b.start,
     touch: false,
+    dayLocked: b.dayLocked,
     x: 0,
     y: 0,
     active: false,
@@ -279,6 +282,7 @@ export function WeekGrid({
     if (e.shiftKey && vertical) cur.len += vertical
     else if (vertical) cur.start += vertical
     else {
+      if (b.dayLocked) return true
       const step = e.key === 'ArrowLeft' ? 1 : -1
       const day = Math.max(0, Math.min(6, cur.day + step)) as DayIndex
       if (day !== cur.day) {

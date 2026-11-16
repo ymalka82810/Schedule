@@ -8,7 +8,7 @@ vi.mock('../suggest', async (orig) => ({
 import { emptyData } from '../../data/empty'
 import { DEFAULT_PLAN, deadlineTarget, planWeek, weekFrame } from '../plan'
 import { zmanimOn } from '../routines'
-import { dismissMissed } from '../prefs'
+import { dismissMissed, moveTravel } from '../prefs'
 import type { Goal, Lesson, PlanSettings, ScheduleData } from '../../types'
 
 // שבוע שמתחיל ביום ראשון 15.11.2026
@@ -257,5 +257,31 @@ describe('סוג השיעור בתכנון', () => {
     const reasons = planWeek(data, WEEK).sessions.flatMap((s) => s.reasons).join(' | ')
     expect(reasons).toMatch(/לפני התרגול, ולהגיע עם שאלות/)
     expect(reasons).toMatch(/עיבוד של ההרצאה באותו יום/)
+  })
+})
+
+describe('הזזת נסיעה', () => {
+  const date = (day: number) => `2026-11-${String(15 + day).padStart(2, '0')}`
+
+  it('נסיעה שהוזזה נשארת במקום החדש רק באותו יום, והזמן הפנוי עוקב אחריה', () => {
+    const data = { ...base({ travelMinutes: 30 }), travelMoves: [{ date: date(0), side: 'after' as const, start: h(15), end: h(15.5) }] }
+    const { reserved, free } = weekFrame(data, WEEK)
+    const after = reserved.filter((r) => r.kind === 'travel' && r.side === 'after')
+    expect(after.map((r) => [r.day, r.start, r.end])).toEqual([
+      [0, h(15), h(15.5)],
+      [2, h(14), h(14.5)],
+    ])
+    expect(after[0].home).toEqual({ start: h(14), end: h(14.5) })
+    expect(after[1].home).toBeUndefined()
+    // הנסיעה כבר לא ב-14:00, אז הזמן שם פנוי (אחרי הפסקה)
+    expect(free[0].some((f) => f.start <= h(14.25) && f.end > h(14.5))).toBe(true)
+  })
+
+  it('החזרה למקום הרגיל מבטלת את ההזזה', () => {
+    const data = base({ travelMinutes: 30 })
+    const moved = moveTravel(data, date(0), 'after', { start: h(14), end: h(14.5) }, h(15), h(15.5))
+    expect(moved.travelMoves).toHaveLength(1)
+    const back = moveTravel(moved, date(0), 'after', { start: h(14), end: h(14.5) }, h(14), h(14.5))
+    expect(back.travelMoves).toEqual([])
   })
 })

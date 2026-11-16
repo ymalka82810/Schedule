@@ -1,6 +1,6 @@
 import { allGoals } from './suggest'
 import type { ColorKey, DayIndex, Minutes, ScheduleData } from '../types'
-import { activeOn, breakOn, isCancelled, placeOf, type PlannedSession, type Reserved } from './plan'
+import { activeOn, breakOn, isCancelled, placeOf, travelBlockId, type PlannedSession, type Reserved } from './plan'
 import type { Slot } from '../types'
 import { dateOfDay } from './time'
 import { dayInfo } from './hebrew'
@@ -49,6 +49,8 @@ export interface Block {
   isBackdrop?: boolean
   /** מפגש שיושב בתוך חלון תרגול חופשי */
   inWindow?: boolean
+  /** אפשר להזיז רק בתוך היום (נסיעה) */
+  dayLocked?: boolean
 }
 
 interface WeekOptions {
@@ -214,8 +216,9 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
   }
 
   for (const r of opts.reserved ?? []) {
+    const travel = r.kind === 'travel' && !!r.side
     blocks.push({
-      id: `reserved-${r.kind}-${r.day}-${r.start}`,
+      id: travel ? travelBlockId(r.day, r.side!) : `reserved-${r.kind}-${r.day}-${r.start}`,
       day: r.day,
       start: r.start,
       end: r.end,
@@ -226,6 +229,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOption: false,
       isOpen: false,
       type: 'reserved',
+      ...(travel ? { draggable: true, dayLocked: true, isMoved: !!r.home || undefined } : {}),
     })
   }
 

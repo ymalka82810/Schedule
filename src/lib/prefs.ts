@@ -148,6 +148,7 @@ function prune(data: ScheduleData, today: string): ScheduleData {
   return {
     ...data,
     planPins: (data.planPins ?? []).filter((p) => p.date >= min),
+    travelMoves: (data.travelMoves ?? []).filter((t) => t.date >= min),
     planSkips: (data.planSkips ?? []).filter((p) => p.date >= min),
     planDismissed: (data.planDismissed ?? []).filter((p) => p.date >= min),
   }
@@ -209,6 +210,23 @@ export function movePlanned(
     planFeedback: trim([...feedback.filter((f) => f.id !== feedbackId), record]),
   }
   return prune(next, toDate)
+}
+
+/**
+ * הזזה של נסיעה בגרירה: רק ביום הזה, והזמן הפנוי מחושב לפי המקום החדש.
+ * החזרה בדיוק למקום הרגיל מבטלת את ההזזה
+ */
+export function moveTravel(
+  data: ScheduleData,
+  date: string,
+  side: 'before' | 'after',
+  home: { start: Minutes; end: Minutes },
+  start: Minutes,
+  end: Minutes,
+): ScheduleData {
+  const rest = (data.travelMoves ?? []).filter((t) => !(t.date === date && t.side === side))
+  const back = start === home.start && end === home.end
+  return prune({ ...data, travelMoves: back ? rest : [...rest, { date, side, start, end }] }, date)
 }
 
 /** מחזיר מפגש שהוזז לתכנון האוטומטי, ומוחק את הרישום שההזזה יצרה (כאילו לא הוזז) */

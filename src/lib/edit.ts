@@ -448,6 +448,7 @@ const BACKUP_LISTS = [
   'cancellations',
   'moves',
   'planPins',
+  'travelMoves',
   'planSkips',
   'planDismissed',
   'planFeedback',

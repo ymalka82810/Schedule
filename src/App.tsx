@@ -30,8 +30,8 @@ import {
   type BlockTarget,
 } from './lib/edit'
 import { MoveDialog } from './components/MoveDialog'
-import { learnedPrefs, movePlanned } from './lib/prefs'
-import { moveOf } from './lib/plan'
+import { learnedPrefs, movePlanned, moveTravel } from './lib/prefs'
+import { moveOf, travelBlockId } from './lib/plan'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from './lib/storage'
@@ -246,6 +246,18 @@ export default function App({ initialData, initialBackup, account, onPersist, in
 
   /** גרירה של בלוק למקום חדש בשבוע המוצג */
   const handleBlockMove = (blockId: string, day: DayIndex, start: Minutes, end: Minutes) => {
+    // נסיעה: מוזזת רק ביום שלה, ורק בשבוע הזה
+    const trip = plan.reserved.find((r) => r.kind === 'travel' && r.side && travelBlockId(r.day, r.side) === blockId)
+    if (trip?.side) {
+      const home = trip.home ?? { start: trip.start, end: trip.end }
+      const back = start === home.start && end === home.end
+      commit(
+        moveTravel(data, dateOfDay(weekStart, trip.day), trip.side, home, start, end),
+        backup,
+        back ? 'הנסיעה חזרה למקום הרגיל' : 'הנסיעה הוזזה ליום הזה בלבד',
+      )
+      return
+    }
     const target = resolveBlock(data, blockId, plan.sessions)
     const block = blocks.find((b) => b.id === blockId)
     if (!target || !block) return

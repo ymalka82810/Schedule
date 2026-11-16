@@ -80,7 +80,14 @@ export interface Reserved {
   label: string
   kind: 'travel' | 'routine'
   routineId?: string
+  /** נסיעה: לפני השיעור הראשון או אחרי האחרון */
+  side?: 'before' | 'after'
+  /** נסיעה שהוזזה ביום הזה: המקום הרגיל שלה */
+  home?: { start: Minutes; end: Minutes }
 }
+
+/** מזהה יציב לבלוק של נסיעה, שלא משתנה כשמזיזים אותה */
+export const travelBlockId = (day: DayIndex, side: 'before' | 'after') => `travel-${day}-${side}`
 
 export interface PlannedSession {
   id: string
@@ -287,8 +294,23 @@ export function weekFrame(
       if (!lessons.length) continue
       const first = Math.min(...lessons.map((l) => l.start))
       const last = Math.max(...lessons.map((l) => l.end))
-      reserved.push({ day, start: first - travel, end: first, label: 'נסיעה', kind: 'travel' })
-      reserved.push({ day, start: last, end: last + travel, label: 'נסיעה', kind: 'travel' })
+      const sides = [
+        { side: 'before', start: first - travel, end: first },
+        { side: 'after', start: last, end: last + travel },
+      ] as const
+      for (const x of sides) {
+        // נסיעה שהוזזה בגרירה ביום הזה נשארת במקום החדש
+        const m = (data.travelMoves ?? []).find((t) => t.date === dates[day] && t.side === x.side)
+        reserved.push({
+          day,
+          start: m?.start ?? x.start,
+          end: m?.end ?? x.end,
+          label: 'נסיעה',
+          kind: 'travel',
+          side: x.side,
+          ...(m ? { home: { start: x.start, end: x.end } } : {}),
+        })
+      }
     }
   }
 

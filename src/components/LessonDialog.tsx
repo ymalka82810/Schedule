@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
+import { useEscape } from './useEscape'
 import type { ColorKey, DayIndex, ScheduleData, Slot } from '../types'
 import {
   COLORS,
@@ -116,13 +117,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose, onOpenGoals }:
   const [chosen, setChosen] = useState<string | null>(target?.kind === 'choice' ? target.group.chosenLessonId : null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscape(onClose)
 
   const title =
     mode.kind === 'new'

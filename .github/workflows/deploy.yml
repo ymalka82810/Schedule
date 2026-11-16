@@ -24,6 +24,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run lint
       # הבדיקות רצות לפני הבנייה: אם פענוח נשבר, האתר לא מתעדכן
       - run: npm test
       - run: npm run build

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { AuthRoot } from './auth/AuthRoot.tsx'
+import { CrashScreen, ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { emptyData } from './data/empty.ts'
 import { initialData } from './data/initial.ts'
 
@@ -14,11 +15,13 @@ const demo = new URLSearchParams(location.search).has('demo')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {convexUrl ? (
-      <AuthRoot url={convexUrl} />
-    ) : (
-      <App initialData={demo ? initialData : emptyData} initialBackup={null} account={{ kind: 'local' }} />
-    )}
+    <ErrorBoundary fallback={(_reset, error) => <CrashScreen error={error} />}>
+      {convexUrl ? (
+        <AuthRoot url={convexUrl} />
+      ) : (
+        <App initialData={demo ? initialData : emptyData} initialBackup={null} account={{ kind: 'local' }} />
+      )}
+    </ErrorBoundary>
   </StrictMode>,
 )
 

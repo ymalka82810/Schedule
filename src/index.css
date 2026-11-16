@@ -2382,3 +2382,31 @@ html {
   inset-inline-start: 9px;
   width: calc(100% - 18px);
 }
+
+/* ---------- מיקוד בדיאלוג ומסך שגיאה ---------- */
+/* הדיאלוג מקבל מיקוד בפתיחה רק כדי שקורא מסך יקריא אותו. בלי מסגרת סביב כולו */
+.dialog:focus {
+  outline: none;
+}
+
+.crash {
+  max-width: 28rem;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+.crash h1 {
+  margin: 0;
+}
+
+.crash p {
+  margin: 0;
+}
+
+.crash pre {
+  margin: 0.5rem 0 0;
+  white-space: pre-wrap;
+  text-align: left;
+  font-size: 0.8rem;
+}

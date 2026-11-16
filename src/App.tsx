@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { DayIndex, Minutes, ScheduleData, Slot } from './types'
 import type { Account } from './auth/account'
-import { ImportDialog } from './components/ImportDialog'
 import { LessonDialog, type LessonDialogMode } from './components/LessonDialog'
 import { EventDialog, SessionDialog } from './components/EventDialogs'
-import { GoalsDialog } from './components/GoalsDialog'
-import { GradesDialog } from './components/GradesDialog'
-import { CalendarDialog } from './components/CalendarDialog'
 import { declineName, declineText, declines, dismissDecline, selfReminder } from './lib/priority'
 import { SEMESTER_NAMES, termNotices } from './lib/semester'
 import { sameSubject } from './lib/pdf/parseCell'
@@ -14,7 +10,6 @@ import { attendedSubjects } from './lib/suggest'
 import { Today } from './components/Today'
 import { activeWeek, breakOn, isWorkDay, planSettings, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
-import { LoginDialog } from './components/LoginDialog'
 import {
   clearMove,
   moveForever,
@@ -37,8 +32,17 @@ import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from './lib/storage'
 import { Menu } from './components/Menu'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { lazyDialog } from './components/lazyDialog'
 import { savedAtDate } from './auth/offlineCache'
 import { DAY_NAMES, addDays, dateOfDay, formatTime, formatWeekRange, isSameDay, isoDate, startOfWeek } from './lib/time'
+
+// דיאלוגים כבדים שלא צריך בציור הראשון של הלוח: נטענים ברקע מיד אחריו
+const ImportDialog = lazyDialog(() => import('./components/ImportDialog').then((m) => m.ImportDialog))
+const GoalsDialog = lazyDialog(() => import('./components/GoalsDialog').then((m) => m.GoalsDialog))
+const GradesDialog = lazyDialog(() => import('./components/GradesDialog').then((m) => m.GradesDialog))
+const CalendarDialog = lazyDialog(() => import('./components/CalendarDialog').then((m) => m.CalendarDialog))
+const LoginDialog = lazyDialog(() => import('./components/LoginDialog').then((m) => m.LoginDialog))
 
 type Dialog =
   | { kind: 'lesson'; mode: LessonDialogMode; date?: string }
@@ -111,10 +115,20 @@ export default function App({ initialData, initialBackup, account, onPersist, in
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#121829' : '#eef1f6')
   }, [theme])
 
-  // מעדכן את קו ה"עכשיו" פעם בדקה
+  // מעדכן את קו ה"עכשיו" פעם בדקה, ומיד כשחוזרים ללשונית (בטלפון השעון נעצר כשהמסך כבוי)
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 60_000)
-    return () => window.clearInterval(id)
+    const tick = () => setNow(new Date())
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick()
+    }
+    const id = window.setInterval(tick, 60_000)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', tick)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', tick)
+    }
   }, [])
 
   // התכנון של הזמן הפנוי מחושב מחדש לכל שבוע: אירועים וביטולים משנים אותו
@@ -137,14 +151,20 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   }, [data, weekStart])
 
   // לכרטיס "היום": תמיד השבוע של היום והשבוע שאחריו, בלי קשר לשבוע המוצג
-  const thisWeek = useMemo(() => startOfWeek(now), [now])
+  // התאריך של תחילת השבוע נשאר אותו אובייקט כל עוד השבוע לא התחלף, כדי לא לתכנן מחדש כל דקה
+  const thisWeekIso = isoDate(startOfWeek(now))
+  const thisWeek = useMemo(() => {
+    const [y, m, d] = thisWeekIso.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }, [thisWeekIso])
   const todayBlocks = useMemo(
     () => {
-      const p = planWeek(data, thisWeek, todayIso, nowMin)
+      // כשהשבוע המוצג הוא השבוע של היום, התכנון שלו כבר מחושב
+      const p = isSameDay(weekStart, thisWeek) ? plan : planWeek(data, thisWeek, todayIso, nowMin)
       // בכרטיס "היום" גם הארוחה או התפילה הבאה, בלי הנסיעות
       return buildBlocks(data, { weekStart: thisWeek, plan: p.sessions, reserved: p.reserved.filter((r) => r.kind === 'routine') })
     },
-    [data, thisWeek, todayIso, nowMin],
+    [data, thisWeek, todayIso, nowMin, weekStart, plan],
   )
   const nextWeekBlocks = useMemo(() => {
     const w = addDays(thisWeek, 7)
@@ -727,6 +747,19 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           onClose={() => setDialog(null)}
         />
       )}
+      <ErrorBoundary
+        fallback={(reset) => (
+          <LoadFailed
+            onClose={() => {
+              setDialog(null)
+              setImporting(false)
+              setLoggingIn(false)
+              reset()
+            }}
+          />
+        )}
+      >
+        <Suspense fallback={null}>
       {dialog?.kind === 'goals' && (
         <GoalsDialog data={data} weekStart={weekStart} today={todayIso} onSave={handleEdit} onClose={() => setDialog(null)} />
       )}
@@ -766,6 +799,8 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           onClose={() => setImporting(false)}
         />
       )}
+        </Suspense>
+      </ErrorBoundary>
     </div>
   )
 }
@@ -817,6 +852,33 @@ function AddHere({
         <span>＋ אירוע או מבחן</span>
         <span className="menu-hint">רק בתאריך הזה</span>
       </button>
+    </div>
+  )
+}
+
+/** חלק מהאתר לא נטען (בדרך כלל: גרסה חדשה עלתה, או שאין רשת). לא מפיל את הלוח */
+function LoadFailed({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="dialog-backdrop" role="presentation">
+      <div className="dialog dialog-compact" role="alertdialog" aria-modal="true" aria-labelledby="load-failed-title">
+        <header className="dialog-head">
+          <h2 id="load-failed-title">החלון לא נטען</h2>
+          <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <div className="dialog-body lesson-form">
+          <p>כנראה שאין חיבור לרשת, או שעלתה גרסה חדשה של האתר. אפשר לנסות שוב, ואם זה חוזר, לטעון את הדף מחדש.</p>
+        </div>
+        <footer className="dialog-foot">
+          <button type="button" className="btn" onClick={onClose}>
+            סגירה
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
+            טעינה מחדש
+          </button>
+        </footer>
+      </div>
     </div>
   )
 }

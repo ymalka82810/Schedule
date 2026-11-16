@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
+import { useEscape } from './useEscape'
 
 interface Props {
   sendCode: (email: string) => Promise<void>
@@ -14,13 +15,7 @@ export function LoginDialog({ sendCode, verifyCode, onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscape(onClose)
 
   const submitEmail = async (e: FormEvent) => {
     e.preventDefault()

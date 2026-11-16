@@ -85,6 +85,8 @@ export function WeekGrid({
   const [ghost, setGhost] = useState<Drag | null>(null)
   const drag = useRef<Drag | null>(null)
   const pressTimer = useRef<number | undefined>(undefined)
+  /** איפה הרוח צוירה בפעם האחרונה (יום, שעה ואורך) */
+  const ghostAt = useRef('')
   /** אחרי גרירה הדפדפן שולח גם click: לא לפתוח את הכרטיס */
   const suppressClick = useRef(false)
   // הערכים העדכניים, בשביל המאזינים של הגרירה שנרשמים פעם אחת
@@ -100,6 +102,7 @@ export function WeekGrid({
   const endDrag = () => {
     window.clearTimeout(pressTimer.current)
     drag.current = null
+    ghostAt.current = ''
     setGhost(null)
     document.body.classList.remove('is-dragging')
   }
@@ -168,8 +171,14 @@ export function WeekGrid({
         if (dist < 5) return
         begin(d)
       }
+      const was = d.active && ghostAt.current
       locate(d, e.clientX, e.clientY)
-      setGhost({ ...d })
+      // העכבר שולח עשרות אירועים בשנייה: מציירים מחדש רק כשהבלוק באמת עבר משבצת
+      const at = `${d.day}:${d.start}:${d.len}`
+      if (was !== at) {
+        ghostAt.current = at
+        setGhost({ ...d })
+      }
       // גלילה אוטומטית ליד קצות המסך
       if (e.clientY < 70) window.scrollBy(0, -14)
       else if (e.clientY > window.innerHeight - 70) window.scrollBy(0, 14)

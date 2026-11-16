@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEscape } from './useEscape'
 import type { DayIndex, ScheduleData } from '../types'
 import { WeekGrid } from './WeekGrid'
 import { buildBlocks, visibleRange } from '../lib/layout'
@@ -90,13 +91,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     setFocusedId(id)
   }
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscape(onClose)
 
   const preview = useMemo(
     () => draftToData(draft.items, { ...current, lessons: [], entries: [], choiceGroups: [] }),

@@ -427,6 +427,21 @@ export function WeekGrid({
                     }
                   : {}
                 const canDrag = !!onBlockMove && !!b.draggable
+                const tags = [
+                  b.isOption && 'לבחירה',
+                  b.isOpen && 'לבחירתך',
+                  b.isActivity && 'פעילות',
+                  b.noPractice && 'בלי תרגול',
+                  b.termTag && !b.isCancelled && b.termTag,
+                  b.isCancelled && (b.cancelTag ?? 'בוטל השבוע'),
+                  b.type === 'event' && (b.cancelTag ?? 'אירוע'),
+                  // מפגש מתוכנן רגיל מזוהה לפי המסגרת המקווקוות. תגית רק כשיש מה לספר
+                  b.type === 'plan' && (b.isDone || b.isMissed || b.isMoved) && (b.isDone ? 'בוצע ✓' : b.isMissed ? 'פוספס' : 'הוזז'),
+                  b.isMoved && b.type !== 'plan' && !b.isCancelled && 'הוזז השבוע',
+                ].filter((t): t is string => !!t)
+                // כמה שורות התוכן צריך מול גובה הבלוק. כשאין מקום, השם, השעה והתגית עוברים לשורה אחת
+                const rows = (tags.length ? 1 : 0) + 2 + (b.room ? 1 : 0) + (b.teacher ? 1 : 0)
+                const snug = duration >= 60 && rows * 20 + 12 > (duration / 60) * 64 - 4
                 const dragProps = canDrag
                   ? {
                       onPointerDown: (e: ReactPointerEvent<HTMLElement>) => startPress(e, b, 'move'),
@@ -445,24 +460,17 @@ export function WeekGrid({
                 return (
                   <article
                     key={b.id}
-                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${b.isActivity ? ' is-activity' : ''}${duration < 60 ? ' is-short' : ''}${duration <= 30 ? ' is-tiny' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${b.isBackdrop ? ' is-backdrop' : ''}${b.inWindow ? ' in-window' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
+                    className={`block c-${b.color}${b.isOption ? ' is-option' : ''}${b.isOpen ? ' is-open' : ''}${b.isActivity ? ' is-activity' : ''}${duration < 60 || snug ? ' is-short' : ''}${snug ? ' is-snug' : ''}${duration <= 30 ? ' is-tiny' : ''}${onBlockClick ? ' is-clickable' : ''} t-${b.type}${b.isCancelled ? ' is-cancelled' : ''}${b.isDone ? ' is-done' : ''}${b.isMissed ? ' is-missed' : ''}${canDrag ? ' is-draggable' : ''}${b.isBackdrop ? ' is-backdrop' : ''}${b.inWindow ? ' in-window' : ''}${ghost?.active && ghost.id === b.id ? ' is-drag-source' : ''}`}
                     style={style}
                     title={[b.name, `${formatTime(b.start)}–${formatTime(b.end)}`, b.type === 'plan' && !b.isDone && !b.isMissed ? 'תרגול מתוכנן' : b.kind, b.room, b.teacher].filter(Boolean).join(' · ')}
                     {...click}
                     {...dragProps}
                   >
-                    {b.isOption && <span className="block-tag">לבחירה</span>}
-                    {b.isOpen && <span className="block-tag">לבחירתך</span>}
-                    {b.isActivity && <span className="block-tag">פעילות</span>}
-                    {b.noPractice && <span className="block-tag">בלי תרגול</span>}
-                    {b.termTag && !b.isCancelled && <span className="block-tag">{b.termTag}</span>}
-                    {b.isCancelled && <span className="block-tag">{b.cancelTag ?? 'בוטל השבוע'}</span>}
-                    {b.type === 'event' && <span className="block-tag">{b.cancelTag ?? 'אירוע'}</span>}
-                    {/* מפגש מתוכנן רגיל מזוהה לפי המסגרת המקווקוות. תגית רק כשיש מה לספר */}
-                    {b.type === 'plan' && (b.isDone || b.isMissed || b.isMoved) && (
-                      <span className="block-tag">{b.isDone ? 'בוצע ✓' : b.isMissed ? 'פוספס' : 'הוזז'}</span>
-                    )}
-                    {b.isMoved && b.type !== 'plan' && !b.isCancelled && <span className="block-tag">הוזז השבוע</span>}
+                    {tags.map((t) => (
+                      <span key={t} className="block-tag">
+                        {t}
+                      </span>
+                    ))}
                     <h3 className="block-name">{b.name}</h3>
                     <p className="block-time">
                       <bdi dir="ltr">

@@ -427,6 +427,21 @@ p {
   display: none;
 }
 
+/*
+ * בלוק של שעה ומעלה שהתוכן שלו לא נכנס בגובה (למשל שעה עם תגית):
+ * אותה שורה משותפת כמו במפגש קצר, והחדר והמורה נשארים בשורות משלהם
+ */
+.block.is-snug {
+  padding-block: 0.25rem;
+  line-height: 1.2;
+}
+
+.block.is-snug .block-meta {
+  display: block;
+  order: 3;
+  flex-basis: 100%;
+}
+
 /* אפשרות במשבצת בחירה: מסגרת מקווקוות עד שבוחרים */
 .block.is-option {
   border: 1.5px dashed var(--hue);

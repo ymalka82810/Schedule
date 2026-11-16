@@ -1258,6 +1258,12 @@ body.is-dragging * {
   touch-action: none;
 }
 
+/* בלוק קצר (חצי שעה ומטה): הידית לא תכסה אותו כולו, כדי שאפשר יהיה גם לגרור אותו */
+.block.is-tiny .block-resize,
+.block.is-short .block-resize {
+  height: min(10px, 35%);
+}
+
 .block-resize::after {
   content: '';
   position: absolute;
@@ -1278,6 +1284,11 @@ body.is-dragging * {
 @media (hover: none) {
   .block-resize {
     height: 16px;
+  }
+
+  .block.is-tiny .block-resize,
+  .block.is-short .block-resize {
+    height: min(16px, 35%);
   }
 
   .block-resize::after {

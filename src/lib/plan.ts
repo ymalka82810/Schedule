@@ -157,6 +157,15 @@ const STEP = 15
 export const breakOn = (data: ScheduleData, date: string) =>
   (data.breaks ?? []).find((b) => b.from <= date && date <= b.to)
 
+/** מה כתוב מעל היום: שם החופשה, ואירועים ומבחנים בלי שעה */
+export function dayLabels(data: ScheduleData, date: string): string[] {
+  const out: string[] = []
+  const b = breakOn(data, date)
+  if (b) out.push(b.title)
+  for (const ev of data.events) if (ev.allDay && ev.date === date) out.push(ev.title)
+  return out
+}
+
 /** האם השיבוץ מבוטל בתאריך הזה: ביטול ידני, חג או חופשה */
 export function isCancelled(data: ScheduleData, refId: string, date: string): boolean {
   return (
@@ -243,6 +252,8 @@ export function busyForWeek(data: ScheduleData, weekStart: Date): Busy[] {
     })
   }
   for (const ev of data.events) {
+    // אירוע בלי שעה לא תופס זמן
+    if (ev.allDay) continue
     const day = DAYS_OF_WEEK.find((d) => dateOfDay(weekStart, d) === ev.date)
     if (day === undefined) continue
     out.push({ day, start: ev.start, end: ev.end, label: ev.title, kind: 'event' })

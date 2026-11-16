@@ -324,6 +324,13 @@ export interface OneOffEvent {
   title: string
   /** מבחן במקצוע הזה: התכנון מגביר את התרגול לפניו */
   examSubject?: string
+  /**
+   * בלי שעה (יום שלם): מופיע ככותרת מעל היום ולא תופס זמן. start ו-end נשמרים כהצעה
+   * למקרה שיקבעו לו שעה. כך מגיעים אירועים ומבחנים מלוח שנתי, שיש בו רק תאריכים
+   */
+  allDay?: boolean
+  /** הגיע מלוח שנתי של המוסד: המזהה של השורה שם, כדי שגרסה מעודכנת תעדכן את התאריך */
+  calendarKey?: string
 }
 
 /**
@@ -349,6 +356,8 @@ export interface Break {
   /** YYYY-MM-DD */
   from: string
   to: string
+  /** הגיעה מלוח שנתי של המוסד: המזהה של השורה שם, כדי שגרסה מעודכנת תעדכן את התאריכים */
+  calendarKey?: string
 }
 
 export interface Settings {

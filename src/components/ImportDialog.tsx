@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarImport } from './CalendarImport'
+import { applyCalendarImport, goneKey, planCalendarImport, type CalendarPlan } from '../lib/yearCalendarImport'
+import { attendedSubjects } from '../lib/suggest'
 import { useEscape } from './useEscape'
 import type { DayIndex, ScheduleData } from '../types'
 import { WeekGrid } from './WeekGrid'
@@ -38,11 +41,15 @@ type Step =
   | { name: 'reading'; file: string; message?: string; fraction?: number }
   | { name: 'whoami'; fileName: string }
   | { name: 'review'; fileName: string }
+  | { name: 'calendar'; fileName: string; title?: string }
   | { name: 'error'; message: string }
 
 
 export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore, onClose }: Props) {
   const [step, setStep] = useState<Step>({ name: 'pick' })
+  /** לוח שנתי שנקרא מהקובץ, מושווה למה שכבר בלוח */
+  const [calPlan, setCalPlan] = useState<CalendarPlan>({ choices: [], gone: [] })
+  const [calRemoving, setCalRemoving] = useState<Set<string>>(new Set())
   const [draft, setDraft] = useState<DraftSchedule>({ items: [], warnings: [] })
   /** הטיוטה כפי שנקראה מהקובץ, עם כל הקבוצות. האשף מסנן ממנה מחדש בכל פעם */
   const [fullItems, setFullItems] = useState<DraftItem[]>([])
@@ -126,10 +133,21 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     if (!file) return
     setStep({ name: 'reading', file: file.name })
     try {
-      const { draft: result, pages: images } = await readScheduleFile(file, (message, fraction) =>
+      const { draft: result, pages: images, calendar } = await readScheduleFile(file, (message, fraction) =>
         setStep({ name: 'reading', file: file.name, message, fraction }),
       )
       setPages(images)
+      // לוח שנתי (חופשות, סמסטרים, מבחנים) ולא מערכת שעות: מסך בדיקה משלו
+      if (calendar) {
+        if (!calendar.items.length) {
+          setStep({ name: 'error', message: 'זה נראה כמו לוח שנתי, אבל לא נמצאו בו שורות.' })
+          return
+        }
+        setCalPlan(planCalendarImport(current, calendar))
+        setCalRemoving(new Set())
+        setStep({ name: 'calendar', fileName: file.name, title: calendar.title })
+        return
+      }
       if (!result.items.length) {
         setStep({
           name: 'error',
@@ -213,6 +231,11 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     onSave(confirmedSel ? withWizard(next, confirmedSel) : next)
   }
 
+  const saveCalendar = () => {
+    onSave(applyCalendarImport(current, calPlan.choices, calPlan.gone.filter((g) => calRemoving.has(goneKey(g)))))
+  }
+  const calCount = calPlan.choices.filter((c) => c.checked).length + calRemoving.size
+
   const checkCount = draft.items.filter((i) => i.check).length
   const choiceCount = draft.items.filter((i) => i.options.length > 1).length
 
@@ -220,7 +243,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
     <div className="dialog-backdrop" role="presentation">
       <div className={`dialog${step.name === 'review' ? '' : ' dialog-medium'}`} role="dialog" aria-modal="true" aria-labelledby="import-title">
         <header className="dialog-head">
-          <h2 id="import-title">{step.name === 'whoami' ? 'מה אני לומד?' : 'ייבוא מערכת מקובץ'}</h2>
+          <h2 id="import-title">{step.name === 'whoami' ? 'מה אני לומד?' : step.name === 'calendar' ? 'ייבוא לוח שנתי' : 'ייבוא מערכת מקובץ'}</h2>
           <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>
             ×
           </button>
@@ -232,6 +255,10 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
               <p>
                 בחר את קובץ המערכת כפי שקיבלת אותו מהמוסד: PDF, או צילום או סריקה של הדף. הקובץ נקרא בדפדפן בלבד ולא
                 נשלח לשום מקום.
+              </p>
+              <p>
+                אפשר להעלות כאן גם את הלוח השנתי של המוסד (חופשות, תאריכי סמסטרים ומבחנים). הוא מזוהה לבד ולא מחליף את
+                המערכת, וגרסה מעודכנת שלו רק מעדכנת את התאריכים.
               </p>
               <p className="muted">
                 אחרי הקריאה תראה טיוטה על הלוח, ותוכל לתקן אותה לפני שהיא נשמרת. שיעורים אישיים, כמו מיגו, לא נמחקים.
@@ -302,6 +329,25 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                 </button>
               </div>
             </div>
+          )}
+
+          {step.name === 'calendar' && (
+            <CalendarImport
+              title={step.title}
+              plan={calPlan}
+              subjects={attendedSubjects(current)}
+              removing={calRemoving}
+              onChange={(index, patch) =>
+                setCalPlan((p) => ({ ...p, choices: p.choices.map((c, i) => (i === index ? { ...c, ...patch } : c)) }))
+              }
+              onToggleRemove={(g) =>
+                setCalRemoving((set) => {
+                  const next = new Set(set)
+                  if (!next.delete(goneKey(g))) next.add(goneKey(g))
+                  return next
+                })
+              }
+            />
           )}
 
           {step.name === 'whoami' && <WhoAmI items={fullItems} selection={selection} teachers={draft.teachers ?? []} onChange={setSelection} />}
@@ -423,6 +469,26 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
                 ביטול
               </button>
             </div>
+          </footer>
+        )}
+
+        {step.name === 'calendar' && (
+          <footer className="dialog-foot">
+            <div className="import-actions">
+              <button type="button" className="btn btn-primary" disabled={calCount === 0} onClick={saveCalendar}>
+                {calCount === 0 ? 'אין מה לעדכן' : calCount === 1 ? 'עדכון הלוח (שינוי אחד)' : `עדכון הלוח (${calCount} שינויים)`}
+              </button>
+              <button type="button" className="btn" onClick={() => setStep({ name: 'pick' })}>
+                בחירת קובץ אחר
+              </button>
+              <button type="button" className="btn" onClick={onClose}>
+                ביטול
+              </button>
+            </div>
+            <p className="muted">
+              המערכת עצמה לא משתנה. אפשר לערוך אחר כך כל שורה ב"עוד" ← "לוח שנה"
+              {memoryOnly ? '. בסביבת הבדיקה הכול נעלם ברענון.' : ', ולבטל הכול ב"שחזור" במסך הייבוא.'}
+            </p>
           </footer>
         )}
 

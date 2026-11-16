@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Break, ScheduleData, SemesterKey } from '../types'
+import type { Break, OneOffEvent, ScheduleData, SemesterKey } from '../types'
 import { SEMESTERS, SEMESTER_NAMES, lessonsOfSemester, semesterProblems, setSemesterDates } from '../lib/semester'
 import { newId } from '../lib/edit'
 import { useEscape } from './useEscape'
@@ -7,7 +7,16 @@ import { useEscape } from './useEscape'
 interface Props {
   data: ScheduleData
   onSave: (data: ScheduleData) => void
+  /** פתיחת אירוע בלי שעה לעריכה (לקבוע לו שעה, לשנות תאריך או למחוק) */
+  onOpenEvent?: (event: OneOffEvent) => void
+  /** היום, YYYY-MM-DD: אירועים שעברו לא מוצגים */
+  today?: string
   onClose: () => void
+}
+
+const shortDate = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${d}.${m}.${String(y).slice(2)}`
 }
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/
@@ -16,8 +25,9 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/
  * לוח השנה במקום אחד: תאריכי הסמסטרים (חלים על כל השיעורים של אותו סמסטר) וחופשות המוסד.
  * החגים מחושבים לבד מהלוח העברי, ולא צריך להזין אותם
  */
-export function CalendarDialog({ data, onSave, onClose }: Props) {
+export function CalendarDialog({ data, onSave, onOpenEvent, today, onClose }: Props) {
   useEscape(onClose)
+  const dayEvents = data.events.filter((e) => e.allDay && (!today || e.date >= today)).sort((a, b) => a.date.localeCompare(b.date))
   const [sem, setSem] = useState<Record<SemesterKey, { from: string; to: string }>>(
     () =>
       Object.fromEntries(
@@ -157,6 +167,34 @@ export function CalendarDialog({ data, onSave, onClose }: Props) {
               ＋ חופשה
             </button>
           </fieldset>
+
+          {dayEvents.length > 0 && (
+            <fieldset className="color-set">
+              <legend>אירועים ומבחנים בלי שעה</legend>
+              <p className="muted">
+                מופיעים ככותרת מעל היום ולא תופסים זמן. מבחן מגביר את התרגול במקצוע בשבועיים שלפניו. כשהשעה ידועה, אפשר
+                לקבוע אותה בעריכה.
+              </p>
+              <ul className="changes-list">
+                {dayEvents.map((e) => (
+                  <li key={e.id} className="change">
+                    <bdi dir="ltr" className="cal-date">
+                      {shortDate(e.date)}
+                    </bdi>
+                    <span className="cal-title">
+                      {e.title}
+                      {e.examSubject && <span className="muted"> · מבחן ב{e.examSubject}</span>}
+                    </span>
+                    {onOpenEvent && (
+                      <button type="button" className="link-btn" onClick={() => onOpenEvent(e)}>
+                        עריכה
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          )}
 
           {error && (
             <p className="import-error" role="alert">

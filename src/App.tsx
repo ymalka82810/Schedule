@@ -8,7 +8,7 @@ import { SEMESTER_NAMES, termNotices } from './lib/semester'
 import { sameSubject } from './lib/pdf/parseCell'
 import { attendedSubjects } from './lib/suggest'
 import { Today } from './components/Today'
-import { activeWeek, breakOn, isWorkDay, planSettings, planWeek, type PlannedSession } from './lib/plan'
+import { activeWeek, dayLabels, isWorkDay, planSettings, planWeek, type PlannedSession } from './lib/plan'
 import type { Goal, OneOffEvent } from './types'
 import {
   clearMove,
@@ -166,8 +166,9 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const dayNotes = useMemo(() => {
     const out: Partial<Record<DayIndex, string>> = {}
     for (const d of [0, 1, 2, 3, 4, 5, 6] as DayIndex[]) {
-      const b = breakOn(data, dateOfDay(weekStart, d))
-      if (b) out[d] = b.title
+      // שם החופשה, ואירועים ומבחנים בלי שעה
+      const labels = dayLabels(data, dateOfDay(weekStart, d))
+      if (labels.length) out[d] = labels.join(' · ')
     }
     return out
   }, [data, weekStart])
@@ -468,8 +469,8 @@ export default function App({ initialData, initialBackup, account, onPersist, in
               align="end"
               header={account.kind === 'owner' || account.kind === 'offline' ? <bdi dir="ltr">{account.email}</bdi> : undefined}
               items={[
-                { label: 'לוח שנה', hint: 'סמסטרים וחופשות', onSelect: () => setDialog({ kind: 'calendar' }) },
-                { label: 'ייבוא וגיבוי', hint: 'קובץ מערכת, גיבוי ושחזור', onSelect: () => setImporting(true) },
+                { label: 'לוח שנה', hint: 'סמסטרים, חופשות ומבחנים', onSelect: () => setDialog({ kind: 'calendar' }) },
+                { label: 'ייבוא וגיבוי', hint: 'קובץ מערכת או לוח שנתי, גיבוי ושחזור', onSelect: () => setImporting(true) },
                 ...(isEmpty ? [] : [{ label: 'הדפסה', hint: 'כל השבוע על דף אחד', onSelect: () => window.print() }]),
                 {
                   label: theme === 'dark' ? 'מצב בהיר' : 'מצב כהה',
@@ -812,7 +813,16 @@ export default function App({ initialData, initialBackup, account, onPersist, in
       )}
 
       {dialog?.kind === 'calendar' && (
-        <CalendarDialog data={data} onSave={(next) => { commit(next, backup, 'לוח השנה נשמר'); setDialog(null) }} onClose={() => setDialog(null)} />
+        <CalendarDialog
+          data={data}
+          today={todayIso}
+          onSave={(next) => {
+            commit(next, backup, 'לוח השנה נשמר')
+            setDialog(null)
+          }}
+          onOpenEvent={(event) => setDialog({ kind: 'event', event })}
+          onClose={() => setDialog(null)}
+        />
       )}
 
       {dialog?.kind === 'grades' && (

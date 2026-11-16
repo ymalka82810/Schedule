@@ -172,6 +172,8 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
 
   if (weekStart) {
     for (const ev of data.events) {
+      // אירוע בלי שעה מופיע ככותרת מעל היום (ראו dayLabels), לא כבלוק
+      if (ev.allDay) continue
       const day = ([0, 1, 2, 3, 4, 5, 6] as DayIndex[]).find((d) => dateOfDay(weekStart, d) === ev.date)
       if (day === undefined) continue
       blocks.push({

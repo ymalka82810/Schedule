@@ -50,6 +50,8 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
   const [end, setEnd] = useState(
     existing?.end ?? (hint !== undefined ? Math.min(hint + 120, 24 * 60) : kind === 'exam' ? 12 * 60 : 22 * 60),
   )
+  /** בלי שעה: כותרת מעל היום, לא תופס זמן */
+  const [allDay, setAllDay] = useState(existing?.allDay ?? false)
   const [error, setError] = useState<string | null>(null)
 
   const submit = (e: FormEvent) => {
@@ -61,7 +63,7 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
     }
     if (kind === 'event' && !title.trim()) return setError('צריך שם לאירוע.')
     if (kind === 'exam' && !subject) return setError('צריך לבחור מקצוע.')
-    const problem = slotProblem({ day: 0, start, end })
+    const problem = allDay ? null : slotProblem({ day: 0, start, end })
     if (problem) return setError(problem)
     onSave(
       saveEvent(data, {
@@ -70,6 +72,7 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
         date,
         start,
         end,
+        allDay: allDay || undefined,
         examSubject: kind === 'exam' ? subject : undefined,
       }),
     )
@@ -154,7 +157,7 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
                 <span>עד תאריך</span>
                 <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
               </label>
-            ) : (
+            ) : allDay ? null : (
               <>
                 <label className="field">
                   <span>התחלה</span>
@@ -167,6 +170,18 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
               </>
             )}
           </div>
+
+          {kind !== 'break' && (
+            <label className="import-filter">
+              <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+              <span>
+                בלי שעה{' '}
+                <span className="muted">
+                  {allDay ? '(מופיע מעל היום ולא תופס זמן. כשתדע את השעה, בטל את הסימון)' : '(כותרת מעל היום, לא תופס זמן)'}
+                </span>
+              </span>
+            </label>
+          )}
 
           {kind === 'break' && (data.breaks ?? []).length > 0 && (
             <div>

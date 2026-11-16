@@ -2410,3 +2410,108 @@ html {
   text-align: left;
   font-size: 0.8rem;
 }
+
+/* ---------- ייבוא לוח שנתי ---------- */
+.cal-import {
+  display: grid;
+  gap: 1rem;
+}
+
+.cal-list,
+.cal-plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.cal-row {
+  padding: 0.375rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.cal-row:first-child {
+  border-top: 0;
+}
+
+.cal-row.is-off .cal-main {
+  opacity: 0.6;
+}
+
+.cal-check {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.cal-check input {
+  flex: none;
+}
+
+.cal-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.75rem;
+}
+
+.cal-title {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.cal-when,
+.cal-date {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9375rem;
+}
+
+.cal-badge {
+  flex: none;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.cal-badge.is-removed {
+  border-color: #b3261e;
+  color: #b3261e;
+}
+
+.cal-detail {
+  margin: 0 0 0.375rem;
+  padding-inline-start: 1.875rem;
+  font-size: 0.875rem;
+}
+
+.cal-subject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cal-subject select {
+  min-height: 2.25rem;
+  max-width: 100%;
+}
+
+.cal-more summary {
+  cursor: pointer;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.cal-plain {
+  gap: 0.25rem;
+  font-size: 0.9375rem;
+}

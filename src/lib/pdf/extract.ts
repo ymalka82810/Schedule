@@ -2,12 +2,17 @@ import { pageToRaw, type PdfOps, type PdfPageLike, type RawPage } from './raw'
 import { parsePages } from './parseSchedule'
 import type { DraftSchedule } from './draft'
 import type { OcrProgress } from './ocr'
+import { isYearCalendar, parseYearCalendar, type YearCalendar } from './yearCalendar'
 
 export interface PdfReadResult {
   draft: DraftSchedule
   /** תמונות של העמודים המקוריים (כתובות blob), להשוואה מול הטיוטה. לשחרר עם URL.revokeObjectURL */
   pages: string[]
+  /** הקובץ הוא לוח שנתי (חופשות, סמסטרים, מבחנים) ולא מערכת שעות */
+  calendar?: YearCalendar
 }
+
+const NO_DRAFT: DraftSchedule = { items: [], warnings: [] }
 
 /** כמה עמודים מציירים לתצוגה. המערכת עצמה בעמוד הראשון, המרצים בשני */
 const PREVIEW_PAGES = 2
@@ -59,6 +64,7 @@ async function readScheduleImage(file: File, onProgress?: OcrProgress): Promise<
   bitmap.close()
   const { ocrCanvas, imageScale } = await import('./ocr')
   const page = await ocrCanvas(canvas, imageScale(canvas), onProgress)
+  if (isYearCalendar([page])) return { draft: NO_DRAFT, pages: [URL.createObjectURL(file)], calendar: parseYearCalendar([page]) }
   return { draft: withOcrWarning(parsePages([page])), pages: [URL.createObjectURL(file)] }
 }
 
@@ -111,6 +117,7 @@ export async function readSchedulePdf(file: File, onProgress?: OcrProgress): Pro
         }
       }
     }
+    if (isYearCalendar(pages)) return { draft: NO_DRAFT, pages: images, calendar: parseYearCalendar(pages) }
     const draft = parsePages(pages)
     return { draft: scanned ? withOcrWarning(draft) : draft, pages: images }
   } finally {

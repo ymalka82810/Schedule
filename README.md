@@ -42,6 +42,7 @@ npm test   # בדיקות הפענוח והאשף
 - `src/auth/AuthRoot.tsx` – בחירה בין סביבת בדיקה (זיכרון) לבעלים (שרת)
 - `src/index.css` – עיצוב וערכות הצבעים
 - `src/fonts/` – הגופנים, מהאתר עצמו
+- `src/lib/pdf/yearCalendar.ts` ו-`src/lib/yearCalendarImport.ts` – קריאת הלוח השנתי של המוסד (חופשות, סמסטרים, מבחנים), וההשוואה שלו למה שכבר בלוח
 - `src/lib/hebrew.ts` ו-`src/lib/sun.ts` – תאריך עברי, חגים וזמני היום, בלי ספרייה (hebcal מותקנת רק לבדיקות שמשוות אליה)
 - `src/auth/saver.ts` – תור השמירות לשרת והגנה מדריסה בין מכשירים
 - `src/lib/appUpdate.ts` – רישום ה-service worker והודעה על גרסה חדשה

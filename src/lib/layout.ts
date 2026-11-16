@@ -229,7 +229,7 @@ export function buildBlocks(data: ScheduleData, opts: WeekOptions = {}): Block[]
       isOption: false,
       isOpen: false,
       type: 'reserved',
-      ...(travel ? { draggable: true, dayLocked: true, isMoved: !!r.home || undefined } : {}),
+      ...(travel ? { draggable: true, dayLocked: true, isMoved: r.moved } : {}),
     })
   }
 

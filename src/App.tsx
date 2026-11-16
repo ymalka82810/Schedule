@@ -30,7 +30,8 @@ import {
   type BlockTarget,
 } from './lib/edit'
 import { MoveDialog } from './components/MoveDialog'
-import { learnedPrefs, movePlanned, moveTravel } from './lib/prefs'
+import { TravelDialog } from './components/TravelDialog'
+import { clearTravelMove, learnedPrefs, movePlanned, moveTravel, setTravelRule } from './lib/prefs'
 import { moveOf, travelBlockId } from './lib/plan'
 import { WeekGrid } from './components/WeekGrid'
 import { buildBlocks, visibleRange } from './lib/layout'
@@ -43,6 +44,17 @@ type Dialog =
   | { kind: 'lesson'; mode: LessonDialogMode; date?: string }
   | { kind: 'event'; event: OneOffEvent | { date: string; title?: string; start?: Minutes } }
   | { kind: 'session'; session: PlannedSession; goal: Goal }
+  | {
+      kind: 'travel'
+      day: DayIndex
+      side: 'before' | 'after'
+      date: string
+      /** המקום עכשיו, המקום בלי ההזזה של היום, והמקום הרגיל */
+      from: { start: Minutes; end: Minutes }
+      base: { start: Minutes; end: Minutes }
+      def: { start: Minutes; end: Minutes }
+      to: { start: Minutes; end: Minutes }
+    }
   | { kind: 'goals' }
   | { kind: 'calendar' }
   | { kind: 'grades'; week?: Date }
@@ -246,16 +258,25 @@ export default function App({ initialData, initialBackup, account, onPersist, in
 
   /** גרירה של בלוק למקום חדש בשבוע המוצג */
   const handleBlockMove = (blockId: string, day: DayIndex, start: Minutes, end: Minutes) => {
-    // נסיעה: מוזזת רק ביום שלה, ורק בשבוע הזה
+    // נסיעה: נשארת ביום שלה. שואלים אם להזיז רק את היום הזה או לקבוע מקום קבוע
     const trip = plan.reserved.find((r) => r.kind === 'travel' && r.side && travelBlockId(r.day, r.side) === blockId)
-    if (trip?.side) {
-      const home = trip.home ?? { start: trip.start, end: trip.end }
-      const back = start === home.start && end === home.end
-      commit(
-        moveTravel(data, dateOfDay(weekStart, trip.day), trip.side, home, start, end),
-        backup,
-        back ? 'הנסיעה חזרה למקום הרגיל' : 'הנסיעה הוזזה ליום הזה בלבד',
-      )
+    if (trip?.side && trip.base && trip.def) {
+      const date = dateOfDay(weekStart, trip.day)
+      // החזרה למקום בלי ההזזה של היום מבטלת אותה, בלי לשאול
+      if (start === trip.base.start && end === trip.base.end) {
+        if (trip.moved) commit(clearTravelMove(data, date, trip.side), backup, 'הנסיעה חזרה למקום שלה')
+        return
+      }
+      setDialog({
+        kind: 'travel',
+        day: trip.day,
+        side: trip.side,
+        date,
+        from: { start: trip.start, end: trip.end },
+        base: trip.base,
+        def: trip.def,
+        to: { start, end },
+      })
       return
     }
     const target = resolveBlock(data, blockId, plan.sessions)
@@ -679,6 +700,28 @@ export default function App({ initialData, initialBackup, account, onPersist, in
           }}
           onForever={() => {
             commit(moveForever(data, dialog.target, dialog.to, dialog.date), backup, 'השיבוץ הוזז בכל השבועות')
+            setDialog(null)
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'travel' && (
+        <TravelDialog
+          day={dialog.day}
+          side={dialog.side}
+          from={dialog.from}
+          to={dialog.to}
+          hasRule={(data.travelRules ?? []).some((r) => r.day === dialog.day && r.side === dialog.side)}
+          onOnce={() => {
+            commit(moveTravel(data, dialog.date, dialog.side, dialog.base, dialog.to.start, dialog.to.end), backup, 'הנסיעה הוזזה ליום הזה בלבד')
+            setDialog(null)
+          }}
+          onForever={() => {
+            commit(
+              setTravelRule(data, dialog.day, dialog.side, dialog.def, dialog.to.start, dialog.to.end, dialog.date),
+              backup,
+              `הנסיעה הוזזה בכל יום ${DAY_NAMES[dialog.day]}`,
+            )
             setDialog(null)
           }}
           onClose={() => setDialog(null)}

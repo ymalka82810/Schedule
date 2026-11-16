@@ -229,6 +229,32 @@ export function moveTravel(
   return prune({ ...data, travelMoves: back ? rest : [...rest, { date, side, start, end }] }, date)
 }
 
+/** מבטל את ההזזה של נסיעה ביום מסוים, והיא חוזרת למקום שלה (לפי הכלל הקבוע, אם יש) */
+export function clearTravelMove(data: ScheduleData, date: string, side: 'before' | 'after'): ScheduleData {
+  return { ...data, travelMoves: (data.travelMoves ?? []).filter((t) => !(t.date === date && t.side === side)) }
+}
+
+/**
+ * מקום קבוע לנסיעה בכל השבועות באותו יום בשבוע, יחסית לשיעור (לפני הראשון או אחרי האחרון).
+ * המקום הרגיל לפי ההגדרות מוחק את הכלל. ההזזה של היום הזה מתבטלת, כי הכלל כבר מכסה אותה
+ */
+export function setTravelRule(
+  data: ScheduleData,
+  day: DayIndex,
+  side: 'before' | 'after',
+  def: { start: Minutes; end: Minutes },
+  start: Minutes,
+  end: Minutes,
+  date: string,
+): ScheduleData {
+  const rest = (data.travelRules ?? []).filter((t) => !(t.day === day && t.side === side))
+  const isDefault = start === def.start && end === def.end
+  // היחס לשיעור: לפני = מרחק מתחילת השיעור הראשון (הסוף הרגיל), אחרי = מרחק מסוף השיעור האחרון (ההתחלה הרגילה)
+  const offset = start - (side === 'before' ? def.end : def.start)
+  const travelRules = isDefault ? rest : [...rest, { day, side, offset, len: end - start }]
+  return clearTravelMove({ ...data, travelRules }, date, side)
+}
+
 /** מחזיר מפגש שהוזז לתכנון האוטומטי, ומוחק את הרישום שההזזה יצרה (כאילו לא הוזז) */
 export function unpinPlanned(data: ScheduleData, pinId: string): ScheduleData {
   const pin = (data.planPins ?? []).find((p) => p.id === pinId)

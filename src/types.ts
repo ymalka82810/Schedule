@@ -193,6 +193,16 @@ export interface TravelMove {
   end: Minutes
 }
 
+/** מקום קבוע לנסיעה ביום בשבוע, יחסית לשיעור: לפני הראשון (היחס לתחילתו) או אחרי האחרון (היחס לסופו) */
+export interface TravelRule {
+  day: DayIndex
+  side: 'before' | 'after'
+  /** דקות מהשיעור: שלילי = לפניו */
+  offset: Minutes
+  /** אורך הנסיעה */
+  len: Minutes
+}
+
 export interface SessionSkip {
   id: string
   goalId: string
@@ -368,6 +378,8 @@ export interface ScheduleData {
   planPins?: SessionPin[]
   /** נסיעות שהוזזו בגרירה, ליום מסוים */
   travelMoves?: TravelMove[]
+  /** מקום קבוע לנסיעה בימים מסוימים בשבוע */
+  travelRules?: TravelRule[]
   /** מפגשים מתוכננים שסומנו "לא מתאים לי כאן" */
   planSkips?: SessionSkip[]
   /** מפגשים שהזמן שלהם עבר ולא יצא לתרגל: יורדים מהלוח, והתכנון משלים אותם בהמשך השבוע */

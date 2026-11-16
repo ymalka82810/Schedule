@@ -82,8 +82,12 @@ export interface Reserved {
   routineId?: string
   /** נסיעה: לפני השיעור הראשון או אחרי האחרון */
   side?: 'before' | 'after'
-  /** נסיעה שהוזזה ביום הזה: המקום הרגיל שלה */
-  home?: { start: Minutes; end: Minutes }
+  /** נסיעה: הוזזה ביום הזה בלבד (ההזזה הנוכחית) */
+  moved?: boolean
+  /** נסיעה: המקום בלי ההזזה של היום הזה (לפי הכלל הקבוע, אם יש) */
+  base?: { start: Minutes; end: Minutes }
+  /** נסיעה: המקום הרגיל לפי ההגדרות, בלי כללים והזזות */
+  def?: { start: Minutes; end: Minutes }
 }
 
 /** מזהה יציב לבלוק של נסיעה, שלא משתנה כשמזיזים אותה */
@@ -301,14 +305,22 @@ export function weekFrame(
       for (const x of sides) {
         // נסיעה שהוזזה בגרירה ביום הזה נשארת במקום החדש
         const m = (data.travelMoves ?? []).find((t) => t.date === dates[day] && t.side === x.side)
+        // מקום קבוע ליום בשבוע: יחסית לשיעור, ולכן זז איתו
+        const rule = (data.travelRules ?? []).find((t) => t.day === day && t.side === x.side)
+        const anchor = x.side === 'before' ? first : last
+        const base = rule
+          ? { start: anchor + rule.offset, end: anchor + rule.offset + rule.len }
+          : { start: x.start, end: x.end }
         reserved.push({
           day,
-          start: m?.start ?? x.start,
-          end: m?.end ?? x.end,
+          start: m?.start ?? base.start,
+          end: m?.end ?? base.end,
           label: 'נסיעה',
           kind: 'travel',
           side: x.side,
-          ...(m ? { home: { start: x.start, end: x.end } } : {}),
+          moved: !!m || undefined,
+          base,
+          def: { start: x.start, end: x.end },
         })
       }
     }

@@ -297,6 +297,8 @@ export function conflictsOf(blocks: Block[], g: { id: string; day: DayIndex; sta
   )
 }
 
+const TRAVEL_ROOM = 90
+
 /** טווח השעות שהלוח מציג: ההגדרות, מורחב אם יש שיעור שחורג מהן. מעוגל לשעות שלמות */
 export function visibleRange(data: ScheduleData, blocks: Block[]): { start: Minutes; end: Minutes } {
   let start = data.settings.dayStart
@@ -305,5 +307,14 @@ export function visibleRange(data: ScheduleData, blocks: Block[]): { start: Minu
     if (b.start < start) start = b.start
     if (b.end > end) end = b.end
   }
+  // יום עם נסיעה: משאירים מקום לגרור אותה עד שעה וחצי לפני הדבר הראשון ביום ואחרי האחרון
+  const travelDays = new Set(blocks.filter((b) => b.dayLocked).map((b) => b.day))
+  for (const b of blocks) {
+    if (b.type === 'reserved' || b.isCancelled || !travelDays.has(b.day)) continue
+    start = Math.min(start, b.start - TRAVEL_ROOM)
+    end = Math.max(end, b.end + TRAVEL_ROOM)
+  }
+  start = Math.max(0, start)
+  end = Math.min(24 * 60, end)
   return { start: Math.floor(start / 60) * 60, end: Math.ceil(end / 60) * 60 }
 }

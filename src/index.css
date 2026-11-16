@@ -1195,9 +1195,13 @@ p {
   background: transparent;
 }
 
-/* זמן שמור (נסיעה, ארוחה, תפילה): רקע עדין בלי מסגרת, לא נלחץ ולא מפריע לגרירה */
-.block.t-reserved {
+/* זמן שמור (נסיעה, ארוחה, תפילה): רקע עדין בלי מסגרת, ושגרות לא נלחצות ולא מפריעות לגרירה */
+/* נסיעה נגררת, ולכן כן מקבלת מגע. שגרות (ארוחות, תפילות) לא */
+.block.t-reserved:not(.is-draggable) {
   pointer-events: none;
+}
+
+.block.t-reserved {
   border: none;
   border-inline-start: 2px solid color-mix(in oklab, var(--hue) 50%, transparent);
   background: repeating-linear-gradient(

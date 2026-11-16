@@ -45,6 +45,10 @@ export interface Block {
   noPractice?: boolean
   /** "שיעור אחרון" / "שיעור ראשון" בסמסטר או בתוקף של השיעור */
   termTag?: string
+  /** חלון תרגול חופשי שכבר התמלא במפגשים: מצויר כרקע מאחוריהם, והם ברוחב מלא */
+  isBackdrop?: boolean
+  /** מפגש שיושב בתוך חלון תרגול חופשי */
+  inWindow?: boolean
 }
 
 interface WeekOptions {
@@ -234,7 +238,16 @@ function sideBySide(blocks: Block[]): Block[] {
   const byDay = new Map<DayIndex, Block[]>()
   for (const b of blocks) byDay.set(b.day, [...(byDay.get(b.day) ?? []), b])
   for (const list of byDay.values()) {
-    const singles = list.filter((b) => b.lanes === 1).sort((a, b) => a.start - b.start)
+    // חלון תרגול חופשי שהמפגשים שלו בתוכו: החלון הופך לרקע, והמפגשים לא נדחסים לחצי רוחב לידו
+    for (const w of list) {
+      if (w.type !== 'practice' || w.isCancelled) continue
+      const over = list.filter((b) => b !== w && !b.isCancelled && b.start < w.end && w.start < b.end)
+      const inside = over.filter((b) => b.type === 'plan' && b.start >= w.start && b.end <= w.end)
+      if (!inside.length || inside.length !== over.length) continue
+      w.isBackdrop = true
+      for (const b of inside) b.inWindow = true
+    }
+    const singles = list.filter((b) => b.lanes === 1 && !b.isBackdrop).sort((a, b) => a.start - b.start)
     let cluster: Block[] = []
     let end = -1
     const flush = () => {

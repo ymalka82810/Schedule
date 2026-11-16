@@ -109,3 +109,24 @@ describe('תזכורת להערכה עצמית', () => {
     expect(selfReminder({ ...initialData, selfRemindSkip: '2026-11-08' }, now, subjects)).toBeNull()
   })
 })
+
+describe('תזכורת להערכה עצמית אצל משתמש חדש', () => {
+  // יום שני 16.11.2026: התזכורת היא על השבוע שעבר (8–14.11)
+  const monday = new Date(2026, 10, 16, 9, 0)
+  it('לא מזכירה על שבוע שנגמר לפני שהלוח התמלא', () => {
+    expect(selfReminder({ ...initialData, startedAt: '2026-11-16' }, monday, ['מתמטיקה'])).toBeNull()
+  })
+  it('מזכירה כשהלוח כבר היה בשימוש באותו שבוע', () => {
+    expect(selfReminder({ ...initialData, startedAt: '2026-11-10' }, monday, ['מתמטיקה'])).not.toBeNull()
+  })
+})
+
+describe('פספוסים אצל משתמש חדש', () => {
+  const week = new Date(2026, 10, 15)
+  it('מה שתוכנן לפני שהלוח התמלא לא מסומן כפוספס', () => {
+    const before = planWeek(initialData, week, '2026-11-16', 9 * 60).sessions.filter((s) => s.missed)
+    expect(before.length).toBeGreaterThan(0)
+    const after = planWeek({ ...initialData, startedAt: '2026-11-16' }, week, '2026-11-16', 9 * 60).sessions.filter((s) => s.missed)
+    expect(after).toHaveLength(0)
+  })
+})

@@ -78,7 +78,7 @@ export function GoalsDialog({ data, weekStart, today, onSave, onClose }: Props) 
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="goals-title">
+      <div className="dialog dialog-medium" role="dialog" aria-modal="true" aria-labelledby="goals-title">
         <header className="dialog-head">
           <h2 id="goals-title">יעדים לזמן הפנוי</h2>
           <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>

@@ -223,7 +223,7 @@ export function ImportDialog({ current, hasBackup, memoryOnly, onSave, onRestore
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <div className={`dialog${step.name === 'review' ? '' : ' dialog-medium'}`} role="dialog" aria-modal="true" aria-labelledby="import-title">
         <header className="dialog-head">
           <h2 id="import-title">{step.name === 'whoami' ? 'מה אני לומד?' : 'ייבוא מערכת מקובץ'}</h2>
           <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>

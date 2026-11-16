@@ -89,6 +89,8 @@ export default function App({ initialData, initialBackup, account, onPersist, in
   const [showHint, setShowHint] = useState(() => !loadFlag('hint-drag-seen'))
   /** לחיצה על מקום ריק בלוח: מה להוסיף שם */
   const [addAt, setAddAt] = useState<{ day: DayIndex; start: Minutes; x: number; y: number } | null>(null)
+  /** מסך מגע בלי עכבר: הטיפים מדברים על לחיצה ארוכה במקום על גרירה ומקלדת */
+  const [isTouch] = useState(() => window.matchMedia('(hover: none)').matches)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -164,6 +166,8 @@ export default function App({ initialData, initialBackup, account, onPersist, in
 
   /** כל שינוי בנתונים עובר כאן: מתעדכן בזיכרון, ואצל הבעלים גם נשמר בשרת */
   const commit = (next: ScheduleData, nextBackup: ScheduleData | null, label = 'השינוי נשמר') => {
+    // הפעם הראשונה שהלוח מתמלא: מהיום הזה סופרים פספוסים ותזכורות, לא מלפני כן
+    if (!next.startedAt && !data.lessons.length && next.lessons.length) next = { ...next, startedAt: todayIso }
     setHistory((h) => [...h.slice(-19), { data, backup, label }])
     setToast(label)
     setData(next)
@@ -385,19 +389,23 @@ export default function App({ initialData, initialBackup, account, onPersist, in
               items={[
                 { label: 'לוח שנה', hint: 'סמסטרים וחופשות', onSelect: () => setDialog({ kind: 'calendar' }) },
                 { label: 'ייבוא וגיבוי', hint: 'קובץ מערכת, גיבוי ושחזור', onSelect: () => setImporting(true) },
-                { label: 'הדפסה', hint: 'כל השבוע על דף אחד', onSelect: () => window.print() },
+                ...(isEmpty ? [] : [{ label: 'הדפסה', hint: 'כל השבוע על דף אחד', onSelect: () => window.print() }]),
                 {
                   label: theme === 'dark' ? 'מצב בהיר' : 'מצב כהה',
                   onSelect: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
                 },
-                {
-                  label: 'איך מזיזים ומוסיפים?',
-                  hint: 'גרירה, לחיצה וקיצורי מקלדת',
-                  onSelect: () => {
-                    saveFlag('hint-drag-seen', false)
-                    setShowHint(true)
-                  },
-                },
+                ...(isEmpty || showHint
+                  ? []
+                  : [
+                      {
+                        label: 'איך מזיזים ומוסיפים?',
+                        hint: isTouch ? 'לחיצה, לחיצה ארוכה והחלקה' : 'גרירה, לחיצה וקיצורי מקלדת',
+                        onSelect: () => {
+                          saveFlag('hint-drag-seen', false)
+                          setShowHint(true)
+                        },
+                      },
+                    ]),
                 ...(account.kind === 'guest' ? [{ label: 'כניסה (בעלים)', onSelect: () => setLoggingIn(true) }] : []),
                 ...(account.kind === 'owner' ? [{ label: 'התנתקות', onSelect: account.signOut, danger: true }] : []),
               ]}
@@ -528,12 +536,17 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         </section>
       )}
 
-      {showHint && (
+      {/* הטיפים על גרירה רק כשיש מה לגרור, ולכל מכשיר רק מה ששייך לו */}
+      {showHint && !isEmpty && (
         <aside className="drag-hint" aria-label="טיפים לשימוש בלוח">
           <ul>
             <li>לחיצה על מקום ריק בלוח מוסיפה שם שיעור או אירוע.</li>
-            <li>גרירה מזיזה שיעור, אירוע או מפגש מתוכנן, והקצה התחתון משנה אורך. בטלפון: לחיצה ארוכה ואז גרירה.</li>
-            <li className="hint-touch">בטלפון: החלקה ימינה או שמאלה על הלוח עוברת בין הימים.</li>
+            {isTouch ? (
+              <li>לחיצה ארוכה ואז גרירה מזיזה שיעור, אירוע או מפגש מתוכנן. גרירה של הפס בתחתית משנה אורך.</li>
+            ) : (
+              <li>גרירה מזיזה שיעור, אירוע או מפגש מתוכנן, והקצה התחתון משנה אורך.</li>
+            )}
+            <li className="hint-touch">החלקה ימינה או שמאלה על הלוח עוברת בין הימים.</li>
             <li className="hint-keys">
               במקלדת: חצים ימינה ושמאלה עוברים בין שבועות, T חוזר להיום, N מוסיף שיעור. על בלוק מסומן החצים מזיזים אותו,
               ו-Enter מאשר.
@@ -617,6 +630,11 @@ export default function App({ initialData, initialBackup, account, onPersist, in
         <SessionDialog
           data={data}
           date={dateOfDay(weekStart, dialog.session.day)}
+          started={
+            dateOfDay(weekStart, dialog.session.day) < todayIso ||
+            (dateOfDay(weekStart, dialog.session.day) === todayIso && dialog.session.start <= now.getHours() * 60 + now.getMinutes())
+          }
+          isTouch={isTouch}
           onSave={handleEdit}
           session={dialog.session}
           goal={dialog.goal}

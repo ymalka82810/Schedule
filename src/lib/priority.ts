@@ -131,6 +131,8 @@ export function selfReminder(
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const dates = [0, 1, 2, 3, 4, 5, 6].map((i) => iso(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i)))
   if (data.selfRemindSkip === dates[0]) return null
+  // שבוע שנגמר לפני שהלוח התמלא: אין על מה להעריך
+  if (data.startedAt && data.startedAt > dates[6]) return null
   const missing = subjects.filter(
     (s) => !(data.grades ?? []).some((g) => g.kind === 'self' && sameSubject(g.subject, s) && dates.includes(g.date)),
   )

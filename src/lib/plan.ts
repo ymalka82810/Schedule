@@ -917,6 +917,8 @@ export function planWeek(data: ScheduleData, weekStart: Date, today?: string, no
       const since = owner?.since
       // גם ביום שבו נוצר: מה שתוכנן לפני השעה שבה נוצר הוא לא פספוס
       if (since && weekDateList[x.day] <= since) continue
+      // לפני שהלוח התמלא (וגם באותו יום) לא היה מה לפספס
+      if (data.startedAt && weekDateList[x.day] <= data.startedAt) continue
       // סימנתי שלא יצא לי: יורד מהלוח (התכנון כבר משלים אותו)
       if (
         (data.planDismissed ?? []).some(

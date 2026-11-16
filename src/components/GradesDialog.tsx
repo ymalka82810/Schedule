@@ -35,7 +35,15 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
   // כאן מציגים כל רצף ירידה, גם כזה שכבר אמרתי עליו "הבנתי" בלוח
   const falling = useMemo(() => declines({ ...draft, declineSkip: [] }, today), [draft, today])
   // הערכה עצמית: ברירת המחדל היא השבוע של היום (במוצאי שבת, השבוע שנגמר עכשיו)
-  const [week, setWeek] = useState(() => initialWeek ?? startOfWeek(toDate(today)))
+  // בראשון ובשני השבוע החדש עוד לא נותן מה להעריך: נפתחים על השבוע שעבר, כמו התזכורת בלוח
+  const [week, setWeek] = useState(() => {
+    if (initialWeek) return initialWeek
+    const now = toDate(today)
+    const cur = startOfWeek(now)
+    const prev = addDays(cur, -7)
+    const prevEnd = dateOfDay(prev, 6)
+    return now.getDay() <= 1 && !(data.startedAt && data.startedAt > prevEnd) ? prev : cur
+  })
   const weekDates = [0, 1, 2, 3, 4, 5, 6].map((d) => dateOfDay(week, d))
   const isFuture = weekDates[0] > today
   const selfOf = (subject: string) =>
@@ -72,7 +80,7 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="grades-title">
+      <div className="dialog dialog-medium" role="dialog" aria-modal="true" aria-labelledby="grades-title">
         <header className="dialog-head">
           <h2 id="grades-title">ציונים ועדיפות</h2>
           <button type="button" className="btn btn-icon" aria-label="סגירה" onClick={onClose}>
@@ -86,6 +94,14 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
             החופשי. ציון חדש שוקל יותר מישן, ומבחן שוקל יותר מהערכה עצמית.
           </p>
 
+          {subjects.length === 0 && (
+            <p className="import-note">
+              עוד אין מקצועות בלוח. אחרי שתייבא מערכת או תוסיף שיעור, אפשר יהיה להזין כאן ציונים והערכה עצמית לכל מקצוע.
+            </p>
+          )}
+
+          {subjects.length > 0 && (
+          <>
           <fieldset className="whoami-set">
             <legend>במה כדאי להתמקד עכשיו</legend>
             {prio.length === 0 ? (
@@ -254,6 +270,8 @@ export function GradesDialog({ data, today, initialWeek, onSave, onClose }: Prop
               </ul>
             )}
           </fieldset>
+          </>
+          )}
         </div>
 
         <footer className="dialog-foot">

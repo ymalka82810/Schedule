@@ -2325,3 +2325,30 @@ html {
     display: inline !important;
   }
 }
+
+/* ---------- ליטוש שימושיות ---------- */
+/* דיאלוג בינוני: יעדים, ציונים וייבוא. ברוחב של התוכן, בלי חצי דיאלוג ריק לידו */
+.dialog-medium {
+  max-width: 48rem;
+}
+
+.dialog-medium .goals,
+.dialog-medium .import-pick,
+.dialog-medium .whoami {
+  max-width: none;
+}
+
+/* חלון תרגול חופשי שהתמלא: מסגרת מפוספסת מאחורי המפגשים, והמפגשים ברוחב מלא בתוכה */
+.block.is-backdrop {
+  z-index: 0;
+}
+
+.block.is-backdrop > :not(.block-resize) {
+  display: none;
+}
+
+.block.in-window {
+  z-index: 1;
+  inset-inline-start: 9px;
+  width: calc(100% - 18px);
+}

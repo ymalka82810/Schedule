@@ -107,7 +107,10 @@ export function EventDialog({ data, event, onSave, onClose }: EventProps) {
                   ['exam', 'מבחן'],
                   ['break', 'חופשה'],
                 ] as const
-              ).map(([k, label]) => (
+              )
+                // מבחן שייך למקצוע: בלי שיעורים בלוח אין במה לבחור
+                .filter(([k]) => k !== 'exam' || subjects.length > 0)
+                .map(([k, label]) => (
                 <label key={k} className="chip">
                   <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
                   <span>{label}</span>
@@ -217,6 +220,9 @@ interface SessionProps {
   goal: Goal
   /** התאריך של המפגש */
   date: string
+  /** המפגש כבר התחיל (או עבר). לפני כן אין מה לדווח עליו */
+  started: boolean
+  isTouch?: boolean
   onSave: (data: ScheduleData) => void
   onEditGoals: () => void
   onClose: () => void
@@ -231,8 +237,11 @@ const RATINGS: { value: Rating; label: string }[] = [
 const RATING_LABEL: Record<Rating, string> = { easy: 'קל מדי', ok: 'מתאים', hard: 'קשה מדי' }
 
 /** מפגש שתוכנן אוטומטית: מתי ולמה דווקא שם, איך לעבוד בו, ותיעוד של דקה בסיום */
-export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, onClose }: SessionProps) {
+export function SessionDialog({ data, session, goal, date, started, isTouch, onSave, onEditGoals, onClose }: SessionProps) {
   useEscape(onClose)
+  /** מפגש שעוד לא התחיל: הדיווח מוסתר, עד שאומרים שכבר תרגלתי */
+  const [early, setEarly] = useState(false)
+  const canLog = started || early
   const [rating, setRating] = useState<Rating | undefined>()
   const [topic, setTopic] = useState('')
   const [stuck, setStuck] = useState('')
@@ -325,6 +334,13 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
                 </ul>
               )}
             </>
+          ) : !canLog ? (
+            <p className="muted">
+              המפגש עוד לא התחיל. אחרי שתתרגל, פתח אותו שוב כדי לסמן ולספר איך היה.{' '}
+              <button type="button" className="link-btn" onClick={() => setEarly(true)}>
+                כבר תרגלתי
+              </button>
+            </p>
           ) : (
             <fieldset className="session-log">
               <legend>{isReview ? 'אחרי החזרה' : 'אחרי המפגש (דקה, לא חובה)'}</legend>
@@ -380,12 +396,13 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
               להוריד אותו מהלוח.
             </p>
           )}
-          {!session.done && !isReview && !session.missed && (
+          {!session.done && !isReview && !session.missed && canLog && (
             <p className="muted">המפגשים מתוכננים מחדש בכל שבוע לפי הזמן הפנוי. אחרי שתרגלת, סמן, והמפגש יישאר במקומו.</p>
           )}
           {!session.done && !session.missed && (
             <p className="muted">
-              אפשר לגרור את המפגש בלוח לשעה אחרת (בטלפון: לחיצה ארוכה). כשאותה הזזה חוזרת פעמיים, התכנון לומד את ההעדפה.
+              {isTouch ? 'לחיצה ארוכה על המפגש בלוח וגרירה מעבירות אותו' : 'אפשר לגרור את המפגש בלוח'} לשעה אחרת. כשאותה הזזה
+              חוזרת פעמיים, התכנון לומד את ההעדפה.
             </p>
           )}
           <div className="import-actions">
@@ -396,9 +413,11 @@ export function SessionDialog({ data, session, goal, date, onSave, onEditGoals, 
                 </button>
               )
             ) : (
-              <button type="button" className="btn btn-primary" onClick={save} disabled={isReview && !review}>
-                {isReview ? 'חזרתי ✓' : 'תרגלתי ✓'}
-              </button>
+              canLog && (
+                <button type="button" className="btn btn-primary" onClick={save} disabled={isReview && !review}>
+                  {isReview ? 'חזרתי ✓' : 'תרגלתי ✓'}
+                </button>
+              )
             )}
             {!session.done && !session.missed && (
               <button

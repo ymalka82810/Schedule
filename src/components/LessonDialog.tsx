@@ -371,7 +371,7 @@ export function LessonDialog({ data, mode, date, onSave, onClose, onOpenGoals }:
               )}
               {lesson && (
                 <fieldset className="color-set">
-                  <legend>מתי השיעור קיים</legend>
+                  <legend>{activity ? 'מתי הפעילות קיימת' : 'מתי השיעור קיים'}</legend>
                   {lesson.note && <p className="whoami-auto">בקובץ כתוב: {lesson.note}.</p>}
                   <label className="field">
                     <span>תוקף</span>

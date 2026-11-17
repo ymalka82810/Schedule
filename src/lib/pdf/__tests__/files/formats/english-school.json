@@ -1,0 +1,149 @@
+{
+ "note": "מערכת באנגלית, ימים משמאל לימין, שעות בלי אפס מוביל ומקף ארוך",
+ "lessons": [
+  {
+   "day": 0,
+   "start": 480,
+   "end": 570,
+   "name": "Math"
+  },
+  {
+   "day": 0,
+   "start": 585,
+   "end": 630,
+   "name": "English"
+  },
+  {
+   "day": 0,
+   "start": 630,
+   "end": 675,
+   "name": "Bible"
+  },
+  {
+   "day": 0,
+   "start": 690,
+   "end": 735,
+   "name": "History"
+  },
+  {
+   "day": 0,
+   "start": 735,
+   "end": 780,
+   "name": "Hebrew"
+  },
+  {
+   "day": 1,
+   "start": 480,
+   "end": 570,
+   "name": "English"
+  },
+  {
+   "day": 1,
+   "start": 585,
+   "end": 675,
+   "name": "Physics"
+  },
+  {
+   "day": 1,
+   "start": 690,
+   "end": 735,
+   "name": "Math"
+  },
+  {
+   "day": 1,
+   "start": 735,
+   "end": 780,
+   "name": "PE"
+  },
+  {
+   "day": 1,
+   "start": 795,
+   "end": 840,
+   "name": "PE"
+  },
+  {
+   "day": 2,
+   "start": 480,
+   "end": 525,
+   "name": "Bible"
+  },
+  {
+   "day": 2,
+   "start": 525,
+   "end": 570,
+   "name": "Hebrew"
+  },
+  {
+   "day": 2,
+   "start": 585,
+   "end": 675,
+   "name": "Math"
+  },
+  {
+   "day": 2,
+   "start": 690,
+   "end": 780,
+   "name": "Biology"
+  },
+  {
+   "day": 3,
+   "start": 480,
+   "end": 525,
+   "name": "History"
+  },
+  {
+   "day": 3,
+   "start": 525,
+   "end": 570,
+   "name": "Physics"
+  },
+  {
+   "day": 3,
+   "start": 585,
+   "end": 630,
+   "name": "English"
+  },
+  {
+   "day": 3,
+   "start": 630,
+   "end": 675,
+   "name": "Math"
+  },
+  {
+   "day": 3,
+   "start": 690,
+   "end": 735,
+   "name": "Bible"
+  },
+  {
+   "day": 3,
+   "start": 735,
+   "end": 780,
+   "name": "Hebrew"
+  },
+  {
+   "day": 4,
+   "start": 480,
+   "end": 570,
+   "name": "Math"
+  },
+  {
+   "day": 4,
+   "start": 585,
+   "end": 630,
+   "name": "Biology"
+  },
+  {
+   "day": 4,
+   "start": 630,
+   "end": 675,
+   "name": "English"
+  },
+  {
+   "day": 4,
+   "start": 690,
+   "end": 735,
+   "name": "PE"
+  }
+ ]
+}
